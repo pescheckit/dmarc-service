@@ -231,12 +231,18 @@ def tenants_page(request: Request, error: str = ""):
         if user is None:
             return _login_redirect(db)
         tenants = []
+        operator_records = []
         for tenant in db.scalars(select(Tenant).order_by(Tenant.slug)):
             domains = []
             for d in tenant.domains:
                 checks = control_plane.check_dns_records(
                     control_plane.required_dns_records(db, d)
                 )
+                operator_records += [
+                    {**c, "domain": d.name}
+                    for c in checks
+                    if c["published_by"] == "operator"
+                ]
                 # Count only what the domain owner publishes; the verification
                 # record is the operator's job and is reported separately.
                 theirs = [c for c in checks if c["published_by"] == "tenant"]
@@ -268,6 +274,8 @@ def tenants_page(request: Request, error: str = ""):
                 request,
                 user,
                 tenants=tenants,
+                operator_records=operator_records,
+                operator_missing=[r for r in operator_records if r["status"] != "ok"],
                 error=error,
                 multi_tenant=get_settings().tenancy_mode == "multi",
             ),
@@ -796,17 +804,6 @@ def settings_page(request: Request, page: int = 1):
             return _login_redirect(db)
         if not user.is_admin:
             return RedirectResponse("/profile", status_code=303)
-        # Everything this installation must publish in its own zone, across
-        # every tenant: without it, receivers refuse to send those reports.
-        operator_records = []
-        for domain in db.scalars(select(Domain).order_by(Domain.name)):
-            for record in control_plane.check_dns_records(
-                control_plane.required_dns_records(db, domain)
-            ):
-                if record["published_by"] == "operator":
-                    operator_records.append({**record, "domain": domain.name})
-        operator_missing = [r for r in operator_records if r["status"] != "ok"]
-
         provider = auth.get_provider(db)
         users = []
         pages = None
@@ -839,8 +836,6 @@ def settings_page(request: Request, page: int = 1):
                 user,
                 settings_error=settings_error,
                 settings_notice=settings_notice,
-                operator_records=operator_records,
-                operator_missing=operator_missing,
                 users=users,
                 pages=pages,
                 sso={
