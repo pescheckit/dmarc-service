@@ -29,10 +29,10 @@
   <div class="banner {{ 'banner-ok' if summary.all_ok else 'banner-bad' }}">
     <div>
       {% if summary.all_ok %}
-      <strong class="ok">All {{ summary.total }} records are published correctly</strong>
+      <strong class="ok">Your {{ summary.total }} records are published correctly</strong>
       <div class="muted">Reports for this domain arrive within ~24h of the first sender cycle.</div>
       {% else %}
-      <strong class="bad">{{ summary.ok }} of {{ summary.total }} records published</strong>
+      <strong class="bad">{{ summary.ok }} of your {{ summary.total }} records published</strong>
       <div class="muted">
         Still to fix:
         {% for p in summary.problems %}<code>{{ p.name }}</code>{% if p.status == "missing" %} (missing){% elif p.status == "mismatch" %} (different record found){% elif p.status == "malformed" %} (malformed value){% else %} (lookup failed){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}

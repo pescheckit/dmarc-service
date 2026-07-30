@@ -438,3 +438,28 @@ def test_operator_record_is_shown_as_status_not_an_instruction(client, monkeypat
     assert "nothing to do in your own DNS" in page
     # and it is called out when absent, since reports depend on it
     assert "Verification is missing" in page
+
+
+def test_domain_banner_counts_only_the_owners_records(client, monkeypatch):
+    """The verification record has its own panel, so counting it twice in the
+    banner contradicted the tenants overview."""
+    from dmarc_service.control_plane import service as cp
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "example.com"})
+
+    # both tenant records live, operator verification still missing
+    def resolver(name):
+        return [] if "_report._dmarc" in name else [
+            "v=DMARC1; p=none; rua=mailto:x@dmarc.reporthost.net",
+        ] if name.startswith("_dmarc.") else [
+            "v=TLSRPTv1; rua=https://x/tlsrpt,mailto:x@dmarc.reporthost.net",
+        ]
+
+    monkeypatch.setattr(cp, "_resolve_txt", resolver)
+    cp.clear_dns_cache()
+
+    page = client.get("/domains/example.com").text
+    assert "Your 2 records are published correctly" in page   # not "3"
+    assert "Verification is missing" in page                  # reported separately

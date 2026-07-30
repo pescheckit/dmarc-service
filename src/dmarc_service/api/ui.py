@@ -317,10 +317,13 @@ def domain_page(request: Request, name: str, page: int = 1):
         required = control_plane.required_dns_records(db, domain)
         dns = control_plane.check_dns_records(required)
         checked_age = control_plane.dns_checked_age([r.name for r in required])
+        # The banner speaks for the records the domain owner publishes; the
+        # verification record has its own panel, since it is not their job.
+        theirs = [r for r in dns if r["published_by"] == "tenant"]
         summary = {
-            "ok": sum(1 for r in dns if r["status"] == "ok"),
-            "total": len(dns),
-            "problems": [r for r in dns if r["status"] != "ok"],
+            "ok": sum(1 for r in theirs if r["status"] == "ok"),
+            "total": len(theirs),
+            "problems": [r for r in theirs if r["status"] != "ok"],
         }
         summary["all_ok"] = summary["ok"] == summary["total"]
         addresses = [
