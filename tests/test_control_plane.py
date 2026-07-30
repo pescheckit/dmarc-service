@@ -95,3 +95,37 @@ def test_recheck_is_rate_limited(db, monkeypatch):
     assert cp.force_dns_recheck(["_dmarc.example.com"]) is False  # too soon
     cp.clear_dns_cache()
     assert cp.force_dns_recheck(["_dmarc.example.com"]) is True   # nothing cached
+
+
+def test_dns_naming_a_retired_address_is_not_published(db, monkeypatch):
+    """Rotating in the UI without updating DNS must not read as healthy."""
+    from dmarc_service.control_plane import service as cp
+
+    tenant = cp.create_tenant(db, "acme", "Acme")
+    domain = cp.add_domain(db, tenant, "example.com")
+    old = cp.active_addresses(db, domain)[0].local_part
+    new = cp.mint_address(db, domain).local_part
+    for address in domain.addresses:
+        if address.local_part == old:
+            address.active = False
+    db.flush()
+
+    # DNS still names the retired address
+    monkeypatch.setattr(
+        cp, "_resolve_txt",
+        lambda name: [f"v=DMARC1; p=none; rua=mailto:{old}@dmarc.reporthost.net"],
+    )
+    cp.clear_dns_cache()
+    statuses = {r["name"]: r["status"] for r in
+                cp.check_dns_records(cp.required_dns_records(db, domain))}
+    assert statuses["_dmarc.example.com"] == "retired"
+
+    # once DNS names the current address it is healthy again
+    monkeypatch.setattr(
+        cp, "_resolve_txt",
+        lambda name: [f"v=DMARC1; p=none; rua=mailto:{new}@dmarc.reporthost.net"],
+    )
+    cp.clear_dns_cache()
+    statuses = {r["name"]: r["status"] for r in
+                cp.check_dns_records(cp.required_dns_records(db, domain))}
+    assert statuses["_dmarc.example.com"] == "ok"

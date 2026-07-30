@@ -13,7 +13,7 @@ from email.message import Message
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dmarc_service.control_plane.service import resolve_address
+from dmarc_service.control_plane.service import resolve_address, resolve_retired_address
 from dmarc_service.db.models import (
     UNROUTED_TENANT_SLUG,
     AggregateRecord,
@@ -48,11 +48,21 @@ def process_message(
 
     local_part = rcpt_to.split("@", 1)[0].lower() if rcpt_to else ""
     address = resolve_address(session, local_part) if local_part else None
+    retired = (
+        resolve_retired_address(session, local_part)
+        if address is None and local_part
+        else None
+    )
 
-    if address is not None:
-        tenant_id = address.domain.tenant_id
-        domain_id = address.domain_id
-        raw.status = "routed"
+    if address is not None or retired is not None:
+        known = address or retired
+        tenant_id = known.domain.tenant_id
+        domain_id = known.domain_id
+        # Mail to an address we retired is still unambiguously ours: attribute
+        # it rather than quarantine it, and record that DNS is out of date.
+        raw.status = "routed" if address else "retired"
+        if retired is not None:
+            raw.error = "delivered to a deactivated address; DNS still names it"
     else:
         unrouted = session.scalar(select(Tenant).where(Tenant.slug == UNROUTED_TENANT_SLUG))
         tenant_id = unrouted.id if unrouted else None

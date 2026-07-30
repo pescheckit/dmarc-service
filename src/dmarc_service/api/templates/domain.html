@@ -52,6 +52,8 @@
               {% elif r.status == "missing" %}<span class="bad">missing</span>
               {% elif r.status == "mismatch" %}<span class="warn">different record</span>
                 <span class="sub">live: {{ r.found | join(" | ") }}</span>
+              {% elif r.status == "retired" %}<span class="bad">points at a retired address</span>
+                <span class="sub">reports go to an address you deactivated</span>
               {% elif r.status == "malformed" %}<span class="warn">malformed</span>
                 <span class="sub">receivers ignore it | live: {{ r.found | join(" | ") }}</span>
               {% else %}<span class="muted">? lookup failed</span>

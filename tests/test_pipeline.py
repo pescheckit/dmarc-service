@@ -78,3 +78,21 @@ def test_garbage_message_is_kept_as_failed(db):
     raw = process_message(db, b"not a mime report at all", rcpt_to="")
     assert raw.status in {"unrouted", "failed"}
     assert db.scalar(select(RawMessage)) is not None
+
+
+def test_mail_to_a_retired_address_is_still_attributed(db, aggregate_xml):
+    """A half-finished rotation must not send reports to quarantine."""
+    tenant = control_plane.create_tenant(db, "acme", "Acme")
+    domain = control_plane.add_domain(db, tenant, "example.com")
+    old = control_plane.active_addresses(db, domain)[0]
+    control_plane.mint_address(db, domain)
+    old.active = False
+    db.flush()
+
+    rcpt = f"{old.local_part}@dmarc.reporthost.net"
+    raw = process_message(db, build_report_email(aggregate_xml, rcpt), rcpt_to=rcpt)
+
+    assert raw.status == "retired"
+    assert "deactivated address" in raw.error
+    report = db.scalar(select(AggregateReport))
+    assert report.domain_id == domain.id  # attributed, not quarantined

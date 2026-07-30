@@ -80,6 +80,20 @@ def resolve_address(session: Session, local_part: str) -> ReportAddress | None:
     )
 
 
+def resolve_retired_address(session: Session, local_part: str) -> ReportAddress | None:
+    """An address we minted and later deactivated.
+
+    Mail to it is still unambiguously ours, so it is attributed to the domain
+    rather than quarantined: a rotation that forgot to update DNS should be
+    visible, not silently lossy.
+    """
+    return session.scalar(
+        select(ReportAddress).where(
+            ReportAddress.local_part == local_part, ReportAddress.active.is_(False)
+        )
+    )
+
+
 def delete_domain(session: Session, domain: Domain) -> None:
     """Remove a domain and its addresses. Historical reports are kept but
     unlinked, so past data stays queryable per tenant."""
@@ -119,6 +133,9 @@ class DnsRecord:
     # every valid record of this kind starts with this version tag; a live
     # answer that lacks it is malformed and receivers will ignore it
     must_start_with: str = ""
+    # a live answer naming one of these is pointing at an address we have
+    # retired: reports still arrive but the rotation is half finished
+    retired_markers: tuple[str, ...] = ()
 
 
 def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
@@ -128,6 +145,11 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
     mailtos = ",".join(f"mailto:{a.local_part}@{report_host}" for a in addresses)
 
     any_mailto = f"@{report_host}"
+    retired = tuple(
+        f"{a.local_part}@{report_host}"
+        for a in domain.addresses
+        if not a.active
+    )
     records = [
         DnsRecord(
             zone=domain.name,
@@ -137,6 +159,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
             published_by="tenant",
             must_contain=any_mailto,
             must_start_with="v=DMARC1",
+            retired_markers=retired,
         ),
         DnsRecord(
             zone=domain.name,
@@ -146,6 +169,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
             published_by="tenant",
             must_contain=any_mailto,
             must_start_with="v=TLSRPTv1",
+            retired_markers=retired,
         ),
     ]
 
@@ -257,12 +281,24 @@ def _resolve_txt(name: str) -> list[str] | None:
         return None
 
 
+def _names_expected_address(record: DnsRecord, answer: str) -> bool:
+    """True when the live answer names an address this record expects now."""
+    expected = [
+        part.strip().rstrip(",;").removeprefix("mailto:")
+        for part in record.content.replace(";", " ").replace(",", " ").split()
+        if "@" in part
+    ]
+    return any(address and address in answer for address in expected)
+
+
 def check_dns_records(records: list[DnsRecord]) -> list[dict]:
     """Verify each expected record against live DNS.
 
     Status per record: ok (published), missing (nothing there), mismatch
-    (TXT exists but doesn't contain ours - e.g. stale record), unknown
-    (lookup failed).
+    (a TXT record exists but is not ours), retired (it names an address we
+    have deactivated, so a rotation was left half finished and reports go to
+    a dead address), malformed (ours, but receivers would ignore it),
+    unknown (lookup failed).
     """
     results = []
     for record in records:
@@ -271,18 +307,20 @@ def check_dns_records(records: list[DnsRecord]) -> list[dict]:
             status = "unknown"
         elif not answers:
             status = "missing"
-        elif any(record.must_contain in answer for answer in answers):
-            # ours is there; flag it when the live value is malformed anyway
-            # (a stray leading quote or prefix makes receivers skip it)
-            matching = [a for a in answers if record.must_contain in a]
-            if record.must_start_with and not any(
-                a.strip().startswith(record.must_start_with) for a in matching
+        else:
+            ours = [a for a in answers if record.must_contain in a]
+            if not ours:
+                status = "mismatch"
+            elif record.must_start_with and not any(
+                a.strip().startswith(record.must_start_with) for a in ours
             ):
                 status = "malformed"
+            elif record.retired_markers and not any(
+                _names_expected_address(record, answer) for answer in ours
+            ):
+                status = "retired"
             else:
                 status = "ok"
-        else:
-            status = "mismatch"
         results.append(
             {
                 "zone": record.zone,
