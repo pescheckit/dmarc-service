@@ -1,3 +1,4 @@
+{% import "_pagination.html" as pager %}
 {% extends "base.html" %}
 {% block content %}
   <h1>Overview</h1>
@@ -35,6 +36,8 @@
       </tbody>
     </table>
   </div>
+  {{ pager.bar(pages) }}
+
   <div class="row-actions">
     <a href="/reports">See all reports, filtered by tenant, domain or day -></a>
   </div>

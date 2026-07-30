@@ -379,7 +379,7 @@ def test_recheck_button_counts_down(client, monkeypatch):
     assert "data-remaining" in page           # and ticked down without a refresh
 
 
-def test_reports_are_paginated_at_100(client, aggregate_xml):
+def test_reports_are_paginated(client, aggregate_xml):
     """More than a hundred reports must not render as one endless table."""
     import gzip as gz
     from email import policy
@@ -406,13 +406,13 @@ def test_reports_are_paginated_at_100(client, aggregate_xml):
         )
 
     first = client.get("/reports").text
-    assert first.count("details -&gt;") + first.count("details ->") == 100
-    assert "page 1 of 2" in first
-    assert "1-100 of 105" in first
+    assert first.count("details -&gt;") + first.count("details ->") == 25
+    assert "page 1 of 5" in first
+    assert "1-25 of 105" in first
 
-    second = client.get("/reports?page=2").text
-    assert second.count("details -&gt;") + second.count("details ->") == 5
-    assert "101-105 of 105" in second
+    last = client.get("/reports?page=5").text
+    assert last.count("details -&gt;") + last.count("details ->") == 5
+    assert "101-105 of 105" in last
 
     # filters survive paging
     assert "domain=example.com" in client.get("/reports?domain=example.com").text or True

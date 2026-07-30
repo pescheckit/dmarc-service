@@ -2,7 +2,7 @@
 {% if pages and pages.pages > 1 %}
 <div class="pagination">
   <span class="muted">
-    {{ pages.offset + 1 }}-{{ [pages.offset + 100, pages.total] | min }} of {{ pages.total }}
+    {{ pages.offset + 1 }}-{{ [pages.offset + pages.per_page, pages.total] | min }} of {{ pages.total }}
   </span>
   <span class="spacer"></span>
   {% if pages.prev %}<a class="pagebtn" href="{{ pages.prev }}">Previous</a>

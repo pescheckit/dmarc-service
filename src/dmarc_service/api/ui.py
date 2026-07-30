@@ -28,7 +28,7 @@ from dmarc_service.db.session import session_scope
 router = APIRouter(include_in_schema=False)
 
 # Table views never render more than this at once.
-PER_PAGE = 100
+PER_PAGE = 25
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
@@ -47,11 +47,17 @@ def _pagination(request: Request, page: int, total: int) -> dict:
     return {
         "page": page,
         "pages": pages,
+        "per_page": PER_PAGE,
         "total": total,
         "offset": (page - 1) * PER_PAGE,
         "prev": link(page - 1) if page > 1 else "",
         "next": link(page + 1) if page < pages else "",
     }
+
+
+def _page_slice(request: Request, page: int, items: list) -> list:
+    window = _pagination(request, page, len(items))
+    return items[window["offset"]:window["offset"] + PER_PAGE]
 
 
 def _current_user(request: Request, db) -> User | None:
@@ -187,13 +193,18 @@ async def sso_callback(request: Request):
 
 
 @router.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def index(request: Request, page: int = 1):
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
             return _login_redirect(db)
+        total = db.scalar(select(func.count(AggregateReport.id))) or 0
+        pages = _pagination(request, page, total)
         reports = db.scalars(
-            select(AggregateReport).order_by(AggregateReport.date_end.desc()).limit(10)
+            select(AggregateReport)
+            .order_by(AggregateReport.date_end.desc())
+            .limit(PER_PAGE)
+            .offset(pages["offset"])
         ).all()
         rows = [_report_row(db, r) for r in reports]
         unrouted = db.scalar(
@@ -209,7 +220,7 @@ def index(request: Request):
         return templates.TemplateResponse(
             request,
             "index.html",
-            _ctx(request, user, reports=rows, unrouted=unrouted, totals=totals),
+            _ctx(request, user, reports=rows, unrouted=unrouted, totals=totals, pages=pages),
         )
 
 
@@ -560,7 +571,9 @@ def _chart_geometry(series: list[dict], domain: str, tenant: str = "") -> dict:
 
 
 @router.get("/graphs", response_class=HTMLResponse)
-def graphs_page(request: Request, domain: str = "", tenant: str = "", days: int = 30):
+def graphs_page(
+    request: Request, domain: str = "", tenant: str = "", days: int = 30, page: int = 1
+):
     days = 90 if days >= 90 else 30
     with session_scope() as db:
         user = _current_user(request, db)
@@ -583,7 +596,12 @@ def graphs_page(request: Request, domain: str = "", tenant: str = "", days: int 
                 request,
                 user,
                 chart=_chart_geometry(series, domain, tenant),
-                series=[d for d in series if d["pass"] or d["fail"]],
+                series=_page_slice(request, page, [d for d in reversed(series)
+                                                   if d["pass"] or d["fail"]]),
+                pages=_pagination(
+                    request, page,
+                    len([d for d in series if d["pass"] or d["fail"]]),
+                ),
                 totals=totals,
                 domains=options["domains"],
                 tenants=options["tenants"],
@@ -733,7 +751,7 @@ def delete_tenant_form(request: Request, slug: str):
 
 
 @router.get("/profile", response_class=HTMLResponse)
-def profile_page(request: Request):
+def profile_page(request: Request, page: int = 1):
     """Personal settings: password and API tokens."""
     with session_scope() as db:
         user = _current_user(request, db)
@@ -745,6 +763,8 @@ def profile_page(request: Request):
                 select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.id)
             )
         ]
+        pages = _pagination(request, page, len(tokens))
+        tokens = tokens[pages["offset"]:pages["offset"] + PER_PAGE]
         return templates.TemplateResponse(
             request,
             "profile.html",
@@ -752,6 +772,7 @@ def profile_page(request: Request):
                 request,
                 user,
                 tokens=tokens,
+                pages=pages,
                 new_token=request.session.pop("new_token", None),
                 settings_error=request.session.pop("settings_error", ""),
                 settings_notice=request.session.pop("settings_notice", ""),
@@ -761,7 +782,7 @@ def profile_page(request: Request):
 
 
 @router.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
+def settings_page(request: Request, page: int = 1):
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
@@ -770,6 +791,7 @@ def settings_page(request: Request):
             return RedirectResponse("/profile", status_code=303)
         provider = auth.get_provider(db)
         users = []
+        pages = None
         if user.is_admin:
             sso_available = provider is not None
             users = [
@@ -787,6 +809,8 @@ def settings_page(request: Request):
                 }
                 for u in db.scalars(select(User).order_by(User.email))
             ]
+            pages = _pagination(request, page, len(users))
+            users = users[pages["offset"]:pages["offset"] + PER_PAGE]
         settings_error = request.session.pop("settings_error", "")
         settings_notice = request.session.pop("settings_notice", "")
         return templates.TemplateResponse(
@@ -798,6 +822,7 @@ def settings_page(request: Request):
                 settings_error=settings_error,
                 settings_notice=settings_notice,
                 users=users,
+                pages=pages,
                 sso={
                     "configured": provider is not None,
                     "name": provider.name if provider else "",
