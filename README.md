@@ -58,6 +58,18 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
   same archive is safe, and imports are attributed by the policy domain inside
   the file so they work for addresses that have since been rotated.
 
+**Knowing the data is sound**
+- **SPF classification**: your own `v=spf1` record is expanded (every include,
+  a, mx and ip term, bounded the way RFC 7208 bounds it) so each sending
+  source is labelled authorized (declared in your SPF), not-in-SPF but
+  authenticated as you, or unknown. It also reveals SPF includes that never
+  send, which are authorisations you can withdraw.
+- **Coverage gaps**: reporters send one report per day, so a missing day means
+  reports were lost rather than that no mail was sent. Gaps are called out
+  before you trust the data enough to tighten a policy.
+- Not indexable: every response carries a `noindex`/`noai` header and
+  robots.txt denies search engines and the AI crawlers that honour it.
+
 **Viewing**
 - Dashboard with 30-day pass/fail/quarantine totals.
 - **Graphs**: daily stacked pass/fail bars, 30 or 90 days, filterable per

@@ -346,8 +346,10 @@ def report_page(request: Request, report_id: int):
         if report is None:
             raise HTTPException(status_code=404, detail="report not found")
         from dmarc_service.ingest import enrich
+        from dmarc_service.ingest import spf as spf_module
 
         intel = enrich.enrich_ips(db, [r.source_ip for r in report.records])
+        spf_networks = spf_module.cached_expand(report.policy_domain)
         records = []
         for r in sorted(report.records, key=lambda r: -r.count):
             ok = r.dkim_result == "pass" or r.spf_result == "pass"
@@ -358,6 +360,7 @@ def report_page(request: Request, report_id: int):
                 {
                     "source_ip": r.source_ip,
                     "owner": enrich.describe(intel.get(r.source_ip)),
+                    "spf_status": spf_module.classify(spf_networks, r.source_ip, aligned=ok),
                     "ptr": (intel.get(r.source_ip).ptr if intel.get(r.source_ip) else ""),
                     "count": r.count,
                     "ok": ok,
@@ -378,6 +381,40 @@ def report_page(request: Request, report_id: int):
 
 
 # --- graphs & report browsing ---
+
+
+def _coverage_gaps(db, domain: str, tenant: str, days: int) -> list[dict]:
+    """Days with no aggregate report at all.
+
+    Reporters send one report per UTC day, so a missing day means the report
+    was lost (bounced, misrouted, mid-rotation) rather than that nothing was
+    sent. Knowing the data is complete is what makes it safe to tighten a
+    policy to quarantine or reject.
+    """
+    from datetime import datetime, timedelta
+
+    query = select(AggregateReport.date_begin)
+    if domain:
+        query = query.where(AggregateReport.policy_domain == domain)
+    if tenant:
+        query = query.where(
+            AggregateReport.tenant_id.in_(select(Tenant.id).where(Tenant.slug == tenant))
+        )
+    covered = {d.date() for d in db.scalars(query)}
+    if not covered:
+        return []
+
+    # Only look between the first report and yesterday: today is still open,
+    # and nothing is expected before collection started.
+    start = max(min(covered), (datetime.now(UTC) - timedelta(days=days)).date())
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
+
+    gaps, cursor = [], start
+    while cursor <= yesterday:
+        if cursor not in covered:
+            gaps.append({"day": cursor.isoformat()})
+        cursor += timedelta(days=1)
+    return gaps
 
 
 def _filter_options(db, tenant: str) -> dict:
@@ -517,6 +554,7 @@ def graphs_page(request: Request, domain: str = "", tenant: str = "", days: int 
                 totals=totals,
                 domains=options["domains"],
                 tenants=options["tenants"],
+                gaps=_coverage_gaps(db, domain, tenant, days),
                 domain=domain,
                 tenant=tenant,
                 days=days,

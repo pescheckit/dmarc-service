@@ -42,6 +42,7 @@ dmarc-service = "dmarc_service.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dmarc_service"]
+artifacts = ["src/dmarc_service/api/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -3,8 +3,10 @@
 import gzip
 import secrets
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
@@ -368,6 +370,31 @@ def _report_summary(db, report: AggregateReport) -> dict:
 # --- misc ---
 
 
+@app.middleware("http")
+async def no_indexing(request: Request, call_next):
+    """This is somebody's mail data; keep it out of search engines and AI
+    crawlers even if a URL leaks."""
+    response = await call_next(request)
+    response.headers["X-Robots-Tag"] = (
+        "noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai"
+    )
+    return response
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon():
+    return FileResponse(
+        Path(__file__).parent / "static" / "favicon.svg", media_type="image/svg+xml"
+    )
+
+
 @app.get("/robots.txt")
 def robots():
-    return Response("User-agent: *\nDisallow: /\n", media_type="text/plain")
+    # Deny everything, and name the AI crawlers that honour robots.txt.
+    denied = [
+        "*", "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-Web",
+        "anthropic-ai", "PerplexityBot", "Google-Extended", "Applebot-Extended",
+        "Bytespider", "CCBot", "Amazonbot", "meta-externalagent", "cohere-ai",
+    ]
+    body = "\n\n".join(f"User-agent: {agent}\nDisallow: /" for agent in denied)
+    return Response(body + "\n", media_type="text/plain")

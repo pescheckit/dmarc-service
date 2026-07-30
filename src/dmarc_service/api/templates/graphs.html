@@ -24,6 +24,19 @@
     </div>
   </div>
 
+  {% if gaps %}
+  <div class="banner banner-bad">
+    <div>
+      <strong class="bad">{{ gaps | length }} day(s) without any report</strong>
+      <div class="muted">
+        Reporters send one report per day, so a missing day means reports were
+        lost rather than that no mail was sent. Check intake before tightening
+        a policy: {% for g in gaps[:8] %}{{ g.day }}{% if not loop.last %}, {% endif %}{% endfor %}{% if gaps | length > 8 %} and {{ gaps | length - 8 }} more{% endif %}.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="cards">
     <div class="card"><div class="stat">{{ totals.total }}</div><div class="muted">messages reported</div></div>
     <div class="card"><div class="stat ok">{{ totals.pass }}</div><div class="muted">passed DMARC</div></div>

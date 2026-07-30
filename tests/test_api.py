@@ -119,3 +119,23 @@ def test_summary(client, aggregate_xml):
     summary = client.get("/api/summary").json()
     assert summary["messages_by_disposition"] == {"none": 7, "quarantine": 3}
     assert summary["unrouted_messages"] == 1
+
+
+def test_not_indexable_by_search_engines_or_ai(client):
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200
+    for agent in ("User-agent: *", "GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot"):
+        assert agent in robots.text
+    assert "Allow:" not in robots.text
+
+    # every response carries the header, even ones nobody links to
+    for path in ("/", "/login", "/healthz", "/docs"):
+        header = client.get(path).headers.get("x-robots-tag", "")
+        assert "noindex" in header and "noai" in header
+
+
+def test_favicon_is_served(client):
+    response = client.get("/favicon.svg")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/svg+xml"
+    assert response.text.startswith("<svg")
