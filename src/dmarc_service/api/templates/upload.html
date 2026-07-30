@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Upload reports - dmarc-service{% endblock %}
+{% block content %}
+  <h1>Upload reports</h1>
+  <p class="muted">Import report files by hand - historical archives, reports that
+  landed in someone's mailbox, or data exported from another DMARC provider.
+  They show up in Reports and Graphs like any received report.</p>
+
+  {% if result %}
+  <div class="banner {{ 'banner-bad' if result.errors and not (result.aggregate or result.tlsrpt) else 'banner-ok' }}">
+    <div>
+      <strong>
+        Imported {{ result.aggregate }} aggregate and {{ result.tlsrpt }} TLS-RPT report(s)
+        from {{ result.files }} file(s)
+      </strong>
+      {% if result.skipped %}
+      <div class="muted">{{ result.skipped }} document(s) skipped - already imported, or not a report.</div>
+      {% endif %}
+      {% for e in result.errors %}<div class="muted bad">{{ e }}</div>{% endfor %}
+    </div>
+    <a href="/">View reports -></a>
+  </div>
+  {% endif %}
+
+  <section class="section" style="margin-top:0">
+    <form method="post" action="/upload" enctype="multipart/form-data">
+      <div class="row-actions" style="margin-top:0">
+        <input type="file" name="files" multiple required
+               accept=".zip,.gz,.xml,.json,.eml,application/zip,application/gzip,text/xml,application/json,message/rfc822">
+        <button type="submit">Import</button>
+      </div>
+    </form>
+    <p class="muted" style="margin-top:var(--s3)">
+      Accepts <code>.zip</code>, <code>.gz</code>, raw <code>.xml</code> /
+      <code>.json</code>, and whole <code>.eml</code> messages - the same formats
+      report senders use. A zip may contain several reports. Duplicates are
+      detected and skipped, so re-importing the same archive is safe. Reports are
+      attributed to a domain by the policy domain inside the file, so they work
+      even for addresses that have since been rotated.
+    </p>
+  </section>
+{% endblock %}
