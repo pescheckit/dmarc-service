@@ -220,3 +220,33 @@ def test_upload_zip_and_gz(client, aggregate_xml, tlsrpt_json):
         follow_redirects=True,
     ).text
     assert "not a DMARC or TLS-RPT document" in page
+
+
+def test_reports_filter_by_tenant_and_domain(client, aggregate_xml):
+    from tests.test_pipeline import build_report_email
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "example.com"})
+    client.post("/tenants", data={"slug": "other", "name": "Other Co"})
+
+    client.post(
+        "/api/ingest",
+        content=build_report_email(aggregate_xml, "x@dmarc.reporthost.net"),
+        headers={"Authorization": "Bearer test-ingest-token",
+                 "X-Rcpt-To": "x@dmarc.reporthost.net"},
+    )
+
+    # the report is attributed to acme via its policy domain
+    assert "example.com" in client.get("/reports?tenant=acme").text
+    assert "No reports match" in client.get("/reports?tenant=other").text
+    assert "example.com" in client.get("/reports?domain=example.com").text
+    assert "No reports match" in client.get("/reports?domain=nothing.example").text
+
+    # tenant chooser is offered once more than one tenant exists
+    page = client.get("/reports").text
+    assert "All tenants" in page and "Acme" in page and "Other Co" in page
+
+    # graphs accept the same filters
+    assert client.get("/graphs?tenant=acme&days=90").status_code == 200
+    assert "tenant=acme" in client.get("/graphs?tenant=acme").text

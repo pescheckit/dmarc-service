@@ -102,23 +102,21 @@ def enrich_ips(session: Session, ips: list[str], limit: int = 25) -> dict[str, I
     cached = {
         row.ip: row for row in session.scalars(select(IpIntel).where(IpIntel.ip.in_(wanted)))
     }
-    missing = [ip for ip in wanted if ip not in cached][:limit]
-    if not missing:
+    # A row with a PTR but no registry data came from a throttled lookup;
+    # retry those rather than showing a half answer forever.
+    incomplete = [ip for ip, row in cached.items() if not row.org and not row.netname]
+    todo = ([ip for ip in wanted if ip not in cached] + incomplete)[:limit]
+    if not todo:
         return cached
 
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
-        for result in pool.map(lookup, missing):
+        for result in pool.map(lookup, todo):
             if not any((result["ptr"], result["netname"], result["org"])):
-                # Registry timeout or rate limit: leave it uncached so the
-                # next view or backfill retries, instead of remembering
-                # "unknown" forever.
-                continue
-            row = IpIntel(
-                ip=result["ip"],
-                ptr=result["ptr"],
-                netname=result["netname"],
-                org=result["org"],
-            )
+                continue  # nothing learned; leave it for a later retry
+            row = cached.get(result["ip"]) or IpIntel(ip=result["ip"])
+            row.ptr = result["ptr"] or row.ptr
+            row.netname = result["netname"] or row.netname
+            row.org = result["org"] or row.org
             session.add(row)
             cached[row.ip] = row
     session.flush()
@@ -142,7 +140,7 @@ def backfill(session: Session, limit: int = 500) -> int:
             select(AggregateRecord.source_ip)
             .distinct()
             .outerjoin(IpIntel, IpIntel.ip == AggregateRecord.source_ip)
-            .where(IpIntel.id.is_(None))
+            .where((IpIntel.id.is_(None)) | ((IpIntel.org == "") & (IpIntel.netname == "")))
             .limit(limit)
         )
     )

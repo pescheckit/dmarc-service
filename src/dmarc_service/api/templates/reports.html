@@ -7,12 +7,22 @@
   </h1>
 
   <div class="filters">
+    {% if tenants | length > 1 %}
     <div class="seg">
-      <a href="/reports{{ '?day=' ~ day if day }}" class="{{ 'active' if not domain }}">All domains</a>
-      {% for d in domains %}
-      <a href="/reports?domain={{ d }}{{ '&day=' ~ day if day }}" class="{{ 'active' if domain == d }}">{{ d }}</a>
+      <a href="/reports{{ '?day=' ~ day if day }}" class="{{ 'active' if not tenant }}">All tenants</a>
+      {% for t in tenants %}
+      <a href="/reports?tenant={{ t.slug }}{{ '&day=' ~ day if day }}" class="{{ 'active' if tenant == t.slug }}">{{ t.name }}</a>
       {% endfor %}
     </div>
+    {% endif %}
+    <div class="seg">
+      <a href="/reports?{{ 'tenant=' ~ tenant ~ '&' if tenant }}{{ 'day=' ~ day if day }}" class="{{ 'active' if not domain }}">All domains</a>
+      {% for d in domains %}
+      <a href="/reports?domain={{ d }}{{ '&tenant=' ~ tenant if tenant }}{{ '&day=' ~ day if day }}" class="{{ 'active' if domain == d }}">{{ d }}</a>
+      {% endfor %}
+    </div>
+    {% if day %}<div class="seg"><a href="/reports?{{ 'domain=' ~ domain ~ '&' if domain }}{{ 'tenant=' ~ tenant if tenant }}">clear day filter</a></div>{% endif %}
+  </div>
     {% if day %}<div class="seg"><a href="/reports{{ '?domain=' ~ domain if domain }}"> clear day filter</a></div>{% endif %}
   </div>
 

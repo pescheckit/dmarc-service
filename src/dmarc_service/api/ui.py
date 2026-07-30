@@ -372,6 +372,20 @@ def report_page(request: Request, report_id: int):
 # --- graphs & report browsing ---
 
 
+def _filter_options(db, tenant: str) -> dict:
+    """Tenants, and the domains belonging to the selected tenant."""
+    tenants = [
+        {"slug": t.slug, "name": t.name}
+        for t in db.scalars(select(Tenant).order_by(Tenant.slug))
+    ]
+    query = select(Domain).order_by(Domain.name)
+    if tenant:
+        query = query.where(
+            Domain.tenant_id.in_(select(Tenant.id).where(Tenant.slug == tenant))
+        )
+    return {"tenants": tenants, "domains": [d.name for d in db.scalars(query)]}
+
+
 def _pass_case():
     return case(
         (
@@ -382,7 +396,7 @@ def _pass_case():
     )
 
 
-def _daily_series(db, domain: str, days: int) -> list[dict]:
+def _daily_series(db, domain: str, days: int, tenant: str = "") -> list[dict]:
     """Per-day pass/fail message totals, bucketed on the report period start."""
     from datetime import UTC, datetime, timedelta
 
@@ -399,6 +413,10 @@ def _daily_series(db, domain: str, days: int) -> list[dict]:
     )
     if domain:
         query = query.where(AggregateReport.policy_domain == domain)
+    if tenant:
+        query = query.where(
+            AggregateReport.tenant_id.in_(select(Tenant.id).where(Tenant.slug == tenant))
+        )
 
     buckets: dict = {}
     for begin, total, ok in db.execute(query):
@@ -416,7 +434,7 @@ def _daily_series(db, domain: str, days: int) -> list[dict]:
     return out
 
 
-def _chart_geometry(series: list[dict], domain: str) -> dict:
+def _chart_geometry(series: list[dict], domain: str, tenant: str = "") -> dict:
     """Server-rendered stacked-bar geometry. Pass sits on the baseline, fail
     stacks on top with a 2px surface gap (position + texture carry the
     distinction for color-blind readers; color is reinforcement)."""
@@ -446,7 +464,8 @@ def _chart_geometry(series: list[dict], domain: str) -> dict:
                 "fail": d["fail"],
                 "show_label": i % max(n // 10, 1) == 0,
                 "link": f"/reports?day={d['day'].isoformat()}"
-                + (f"&domain={domain}" if domain else ""),
+                + (f"&domain={domain}" if domain else "")
+                + (f"&tenant={tenant}" if tenant else ""),
             }
         )
     return {
@@ -463,16 +482,16 @@ def _chart_geometry(series: list[dict], domain: str) -> dict:
 
 
 @router.get("/graphs", response_class=HTMLResponse)
-def graphs_page(request: Request, domain: str = "", days: int = 30):
+def graphs_page(request: Request, domain: str = "", tenant: str = "", days: int = 30):
     days = 90 if days >= 90 else 30
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
             return _login_redirect(db)
-        domains = [d.name for d in db.scalars(select(Domain).order_by(Domain.name))]
-        if domain and domain not in domains:
+        options = _filter_options(db, tenant)
+        if domain and domain not in options["domains"]:
             domain = ""
-        series = _daily_series(db, domain, days)
+        series = _daily_series(db, domain, days, tenant)
         totals = {
             "pass": sum(d["pass"] for d in series),
             "fail": sum(d["fail"] for d in series),
@@ -485,11 +504,13 @@ def graphs_page(request: Request, domain: str = "", days: int = 30):
             _ctx(
                 request,
                 user,
-                chart=_chart_geometry(series, domain),
+                chart=_chart_geometry(series, domain, tenant),
                 series=[d for d in series if d["pass"] or d["fail"]],
                 totals=totals,
-                domains=domains,
+                domains=options["domains"],
+                tenants=options["tenants"],
                 domain=domain,
+                tenant=tenant,
                 days=days,
             ),
         )
@@ -537,7 +558,7 @@ async def upload_reports(request: Request, files: list[UploadFile] = File(...)):
 
 
 @router.get("/reports", response_class=HTMLResponse)
-def reports_page(request: Request, domain: str = "", day: str = ""):
+def reports_page(request: Request, domain: str = "", tenant: str = "", day: str = ""):
     from datetime import date, datetime, time
 
     with session_scope() as db:
@@ -547,6 +568,10 @@ def reports_page(request: Request, domain: str = "", day: str = ""):
         query = select(AggregateReport).order_by(AggregateReport.date_end.desc())
         if domain:
             query = query.where(AggregateReport.policy_domain == domain.lower())
+        if tenant:
+            query = query.where(
+                AggregateReport.tenant_id.in_(select(Tenant.id).where(Tenant.slug == tenant))
+            )
         picked = None
         if day:
             try:
@@ -562,11 +587,12 @@ def reports_page(request: Request, domain: str = "", day: str = ""):
             )
         reports = db.scalars(query.limit(200)).all()
         rows = [_report_row(db, r) for r in reports]
-        domains = [d.name for d in db.scalars(select(Domain).order_by(Domain.name))]
+        options = _filter_options(db, tenant)
         return templates.TemplateResponse(
             request,
             "reports.html",
-            _ctx(request, user, reports=rows, domains=domains, domain=domain,
+            _ctx(request, user, reports=rows, domains=options["domains"],
+                 tenants=options["tenants"], domain=domain, tenant=tenant,
                  day=picked.isoformat() if picked else ""),
         )
 
