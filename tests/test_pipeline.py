@@ -130,3 +130,18 @@ def test_reprocess_recovers_messages_after_a_parser_fix(db, aggregate_xml, monke
     assert counts["recovered"] == 1
     report = db.scalar(select(AggregateReport))
     assert report is not None and report.domain_id == domain.id
+
+
+def test_reprocess_is_idempotent(db, aggregate_xml):
+    """Running it repeatedly must not duplicate or re-fail anything."""
+    from dmarc_service.ingest import pipeline
+
+    tenant = control_plane.create_tenant(db, "acme", "Acme")
+    domain = control_plane.add_domain(db, tenant, "example.com")
+    rcpt = f"{control_plane.active_addresses(db, domain)[0].local_part}@dmarc.reporthost.net"
+    process_message(db, build_report_email(aggregate_xml, rcpt), rcpt_to=rcpt)
+
+    first = pipeline.reprocess(db)
+    second = pipeline.reprocess(db)
+    assert first["recovered"] == 0 and second["recovered"] == 0
+    assert len(db.scalars(select(AggregateReport)).all()) == 1

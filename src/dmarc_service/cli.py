@@ -42,8 +42,17 @@ def main(argv: list[str] | None = None) -> None:
         run()
     elif args.command == "migrate":
         from dmarc_service.db.migrate import upgrade
+        from dmarc_service.db.session import session_scope
+        from dmarc_service.ingest.pipeline import reprocess
 
         upgrade()
+        # Every release may teach the parser a new format or fix routing, so
+        # replay whatever could not be stored before. Messages are kept
+        # verbatim precisely because senders never resend them.
+        with session_scope() as db:
+            counts = reprocess(db)
+        if counts["recovered"]:
+            print(f"recovered {counts['recovered']} previously unstored message(s)")
     elif args.command == "enrich":
         from dmarc_service.db.session import session_scope
         from dmarc_service.ingest.enrich import backfill
