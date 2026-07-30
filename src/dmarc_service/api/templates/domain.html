@@ -4,17 +4,35 @@
   <h1>{{ domain.name }}</h1>
 
   <h2>DNS records to publish</h2>
+  <div class="banner {{ 'banner-ok' if summary.all_ok else 'banner-bad' }}">
+    <div>
+      {% if summary.all_ok %}
+      <strong class="ok">✓ All {{ summary.total }} records are published correctly</strong>
+      <div class="muted">Reports for this domain will arrive within ~24h of the first sender cycle.</div>
+      {% else %}
+      <strong class="bad">{{ summary.ok }} of {{ summary.total }} records published</strong>
+      <div class="muted">
+        Still to fix:
+        {% for p in summary.problems %}<code>{{ p.name }}</code>{% if p.status == "missing" %} (missing){% elif p.status == "mismatch" %} (different record found){% elif p.status == "malformed" %} (malformed value){% else %} (lookup failed){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+      </div>
+      {% endif %}
+      <div class="muted">
+        {% if just_checked %}Just re-checked against the domain's authoritative nameservers.
+        {% elif checked_age is not none %}Checked {{ checked_age }}s ago (authoritative lookup, cached {{ (900 / 60) | int }} min).
+        {% endif %}
+      </div>
+    </div>
+    <form class="inline" method="post" action="/domains/{{ domain.name }}/dns/recheck">
+      {% if recheck_wait %}
+      <button disabled title="rate limited to once a minute">Re-check in {{ recheck_wait }}s</button>
+      {% else %}
+      <button>Re-check now</button>
+      {% endif %}
+    </form>
+  </div>
+
   <p class="muted">Copy these exactly. Records marked <em>operator</em> are published by whoever
-  runs this service ({{ report_host }}); <em>tenant</em> records go in the domain's own zone.
-  {% if checked_age is not none %}Last checked {{ checked_age }}s ago.{% endif %}
-  </p>
-  <form class="inline" method="post" action="/domains/{{ domain.name }}/dns/recheck" style="margin-bottom:.6rem">
-    {% if recheck_wait %}
-    <button disabled title="wait {{ recheck_wait }}s">Re-check DNS (in {{ recheck_wait }}s)</button>
-    {% else %}
-    <button>Re-check DNS now</button>
-    {% endif %}
-  </form>
+  runs this service ({{ report_host }}); <em>tenant</em> records go in the domain's own zone.</p>
   <table>
     <thead><tr><th>Name</th><th>Type</th><th>Content</th><th>Published by</th><th>Live check</th></tr></thead>
     <tbody>
@@ -28,7 +46,9 @@
           {% if r.status == "ok" %}<span class="ok">✓ published</span>
           {% elif r.status == "missing" %}<span class="bad">✗ missing</span>
           {% elif r.status == "mismatch" %}<span class="warn">≠ different record found</span>
-            <div class="muted"><code class="rec">{{ r.found | join(" · ") }}</code></div>
+            <div class="muted">live: <code class="rec">{{ r.found | join(" · ") }}</code></div>
+          {% elif r.status == "malformed" %}<span class="warn">⚠ malformed — receivers will ignore it</span>
+            <div class="muted">live: <code class="rec">{{ r.found | join(" · ") }}</code></div>
           {% else %}<span class="muted">? lookup failed</span>
           {% endif %}
         </td>

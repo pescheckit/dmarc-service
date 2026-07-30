@@ -79,6 +79,12 @@
     .seg a:last-child { border-right: none; }
     .seg a.active { background: var(--border); color: var(--ink); font-weight: 600; }
 
+    .banner { display: flex; gap: 1rem; align-items: center; justify-content: space-between;
+              flex-wrap: wrap; border: 1px solid var(--border); border-left-width: 4px;
+              border-radius: 10px; padding: .8rem 1rem; background: var(--card); margin: .8rem 0; }
+    .banner-ok { border-left-color: #0b7a0b; }
+    .banner-bad { border-left-color: #c22b2b; }
+
     .chart-card { padding: 1rem; }
     .chart-scroll { overflow-x: auto; }
     .legend { display: flex; gap: 1.2rem; align-items: center; margin-bottom: .6rem; font-size: .92rem; }

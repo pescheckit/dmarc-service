@@ -62,3 +62,36 @@ def test_rotation_keeps_two_active(db):
     records = control_plane.required_dns_records(db, domain)
     dmarc = next(r for r in records if r.name.startswith("_dmarc."))
     assert first.local_part in dmarc.content and second.local_part in dmarc.content
+
+
+def test_check_dns_flags_malformed(db, monkeypatch):
+    from dmarc_service.control_plane import service as cp
+
+    tenant = cp.create_tenant(db, "acme", "Acme")
+    domain = cp.add_domain(db, tenant, "example.com")
+    records = cp.required_dns_records(db, domain)
+
+    # our address is present but the value has a stray leading quote, so
+    # receivers would skip it: that must NOT read as "published"
+    address = cp.active_addresses(db, domain)[0].local_part
+    monkeypatch.setattr(
+        cp, "_resolve_txt",
+        lambda name: [f'"v=DMARC1; p=none; rua=mailto:{address}@dmarc.reporthost.net"'],
+    )
+    cp.clear_dns_cache()
+    statuses = {r["name"]: r["status"] for r in cp.check_dns_records(records)}
+    assert statuses["_dmarc.example.com"] == "malformed"
+
+
+def test_recheck_is_rate_limited(db, monkeypatch):
+    from dmarc_service.control_plane import service as cp
+
+    cp.clear_dns_cache()
+    monkeypatch.setattr(cp, "_resolve_txt", lambda name: ["v=DMARC1"])
+    cp.check_dns_records(
+        [cp.DnsRecord(zone="z", name="_dmarc.example.com", type="TXT", content="c",
+                      published_by="tenant", must_contain="v=DMARC1")]
+    )
+    assert cp.force_dns_recheck(["_dmarc.example.com"]) is False  # too soon
+    cp.clear_dns_cache()
+    assert cp.force_dns_recheck(["_dmarc.example.com"]) is True   # nothing cached

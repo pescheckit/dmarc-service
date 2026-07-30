@@ -269,6 +269,12 @@ def domain_page(request: Request, name: str):
         required = control_plane.required_dns_records(db, domain)
         dns = control_plane.check_dns_records(required)
         checked_age = control_plane.dns_checked_age([r.name for r in required])
+        summary = {
+            "ok": sum(1 for r in dns if r["status"] == "ok"),
+            "total": len(dns),
+            "problems": [r for r in dns if r["status"] != "ok"],
+        }
+        summary["all_ok"] = summary["ok"] == summary["total"]
         addresses = [
             {"local_part": a.local_part, "active": a.active}
             for a in sorted(domain.addresses, key=lambda a: (not a.active, a.local_part))
@@ -284,7 +290,8 @@ def domain_page(request: Request, name: str):
             request,
             "domain.html",
             _ctx(request, user, domain={"name": domain.name}, dns=dns,
-                 addresses=addresses, reports=rows,
+                 addresses=addresses, reports=rows, summary=summary,
+                 just_checked=request.session.pop("dns_rechecked", False),
                  checked_age=int(checked_age) if checked_age is not None else None,
                  recheck_wait=int(control_plane.DNS_RECHECK_INTERVAL - checked_age)
                  if checked_age is not None
@@ -528,7 +535,9 @@ def recheck_dns(request: Request, name: str):
         if domain is None:
             raise HTTPException(status_code=404, detail="domain not found")
         required = control_plane.required_dns_records(db, domain)
-        control_plane.force_dns_recheck([r.name for r in required])
+        request.session["dns_rechecked"] = control_plane.force_dns_recheck(
+            [r.name for r in required]
+        )
     return RedirectResponse(f"/domains/{name}", status_code=303)
 
 

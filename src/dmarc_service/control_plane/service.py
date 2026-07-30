@@ -116,6 +116,9 @@ class DnsRecord:
     # substring whose presence in a live TXT answer counts as "published"
     # (records may legitimately carry extra rua entries during migrations)
     must_contain: str = ""
+    # every valid record of this kind starts with this version tag; a live
+    # answer that lacks it is malformed and receivers will ignore it
+    must_start_with: str = ""
 
 
 def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
@@ -133,6 +136,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
             content=f"v=DMARC1; p=none; rua={mailtos}",
             published_by="tenant",
             must_contain=any_mailto,
+            must_start_with="v=DMARC1",
         ),
         DnsRecord(
             zone=domain.name,
@@ -141,6 +145,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
             content=f"v=TLSRPTv1; rua={settings.external_url}/tlsrpt,{mailtos}",
             published_by="tenant",
             must_contain=any_mailto,
+            must_start_with="v=TLSRPTv1",
         ),
     ]
 
@@ -157,6 +162,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
                 content="v=DMARC1",
                 published_by="operator",
                 must_contain="v=DMARC1",
+                must_start_with="v=DMARC1",
             )
         )
     return records
@@ -205,17 +211,49 @@ def _resolve_txt_cached(name: str) -> list[str] | None:
     return answers
 
 
+def _authoritative_nameservers(zone: str) -> list[str]:
+    """IPs of the zone's authoritative nameservers, via public resolvers."""
+    import dns.resolver
+
+    resolver = dns.resolver.Resolver(configure=False)
+    resolver.nameservers = ["1.1.1.1", "8.8.8.8"]
+    resolver.lifetime = 3.0
+
+    ips: list[str] = []
+    for ns in resolver.resolve(zone, "NS"):
+        host = str(ns.target).rstrip(".")
+        try:
+            ips.extend(str(a) for a in resolver.resolve(host, "A"))
+        except Exception:  # noqa: BLE001 - skip a nameserver we cannot reach
+            continue
+    return ips
+
+
 def _resolve_txt(name: str) -> list[str] | None:
     """Returns TXT answers, [] when the name exists without TXT data, or
-    None when resolution failed (treat as unknown, not missing)."""
+    None when resolution failed (treat as unknown, not missing).
+
+    Queries the zone's authoritative nameservers directly: a recursive
+    resolver would serve stale positive *and* negative answers for up to the
+    record's TTL, which makes a "live check" lie right after a DNS edit.
+    """
     import dns.resolver
 
     try:
-        answers = dns.resolver.resolve(name, "TXT", lifetime=3.0)
+        nameservers = _authoritative_nameservers(org_domain(name))
+    except Exception:  # noqa: BLE001 - fall back to public resolvers
+        nameservers = []
+
+    resolver = dns.resolver.Resolver(configure=False)
+    resolver.nameservers = nameservers or ["1.1.1.1", "8.8.8.8"]
+    resolver.lifetime = 4.0
+
+    try:
+        answers = resolver.resolve(name, "TXT")
         return ["".join(s.decode() for s in r.strings) for r in answers]
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
         return []
-    except Exception:  # timeout, servfail, no network — unknown, not missing
+    except Exception:  # noqa: BLE001 - timeout/servfail: unknown, not missing
         return None
 
 
@@ -234,7 +272,15 @@ def check_dns_records(records: list[DnsRecord]) -> list[dict]:
         elif not answers:
             status = "missing"
         elif any(record.must_contain in answer for answer in answers):
-            status = "ok"
+            # ours is there; flag it when the live value is malformed anyway
+            # (a stray leading quote or prefix makes receivers skip it)
+            matching = [a for a in answers if record.must_contain in a]
+            if record.must_start_with and not any(
+                a.strip().startswith(record.must_start_with) for a in matching
+            ):
+                status = "malformed"
+            else:
+                status = "ok"
         else:
             status = "mismatch"
         results.append(
