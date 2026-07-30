@@ -13,8 +13,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9
+        with:
+          # There is no lock file, so the cache key would never change and the
+          # cache would never be invalidated; key it on the dependencies.
+          cache-dependency-glob: pyproject.toml
       - run: uv venv && uv pip install -e '.[dev]'
       - run: .venv/bin/ruff check .
       - run: .venv/bin/pytest -q
@@ -22,8 +26,8 @@ jobs:
   helm-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
       - run: helm lint chart/dmarc-service
       - run: helm template chart/dmarc-service > /dev/null
 
@@ -36,24 +40,24 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: Resolve version
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:latest
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - name: Push chart to GHCR (OCI)
         run: |
           helm package chart/dmarc-service \
@@ -71,7 +75,7 @@ jobs:
     steps:
       # The compose file and proxy config are copied to the host, so the
       # deploy job needs the repository too.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Deploy over SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
