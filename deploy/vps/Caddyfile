@@ -1,5 +1,11 @@
 {$REPORT_HOST} {
-	reverse_proxy web:8000
+	reverse_proxy web:8000 {
+		# Ride out a container swap instead of showing a 502: retry for a
+		# while, and do not mark the upstream dead on a single refusal.
+		lb_try_duration 20s
+		lb_try_interval 500ms
+		fail_duration 5s
+	}
 	# Aggregate reports can be large; TLS-RPT posts are small, but keep headroom.
 	request_body {
 		max_size 64MB

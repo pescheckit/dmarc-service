@@ -79,5 +79,54 @@ jobs:
           fi
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "root@$DEPLOY_HOST" \
-            'cd /opt/dmarc && docker compose pull --quiet && systemctl restart dmarc && sleep 15 && docker ps --format "{{.Names}} {{.Status}}"'
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new root@$DEPLOY_HOST"
+
+          # The compose file and proxy config live in this repository, so a
+          # deploy can change them without rebuilding the host.
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            deploy/vps/docker-compose.yml deploy/vps/Caddyfile "root@$DEPLOY_HOST:/opt/dmarc/"
+
+          # Boot-time unit must start the stack detached, otherwise a deploy
+          # that recreates containers pulls the foreground unit down with it.
+          $SSH 'cat > /etc/systemd/system/dmarc.service' <<"UNIT"
+          [Unit]
+          Description=dmarc-service stack (docker compose)
+          After=docker.service
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=/opt/dmarc
+          ExecStart=/usr/bin/docker compose up -d --remove-orphans --wait
+          ExecStop=/usr/bin/docker compose down
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          $SSH 'systemctl daemon-reload'
+
+          $SSH 'set -e
+            cd /opt/dmarc
+            # Each release leaves the previous image behind, which fills a
+            # small disk in a few dozen deploys, so reclaim before pulling.
+            docker image prune -af --filter until=24h >/dev/null || true
+            df -h / | tail -1
+
+            docker compose pull --quiet
+            docker compose run --rm --no-deps migrate
+
+            # Recreate only the application containers and wait until they
+            # report healthy. Postgres and the proxy keep running, and Caddy
+            # retries during the swap, so requests are not dropped.
+            docker compose up -d --no-deps --wait --wait-timeout 120 web smtp
+            docker compose up -d --no-deps caddy postgres
+
+            docker compose ps --format "{{.Name}}\t{{.Status}}"
+            docker image prune -af --filter until=1h >/dev/null || true
+
+            # The proxy answers for the new container, from the host itself.
+            curl -fsS -o /dev/null -w "healthz via proxy: %{http_code}\n" \
+              --resolve "$(hostname -f):443:127.0.0.1" https://localhost/healthz \
+              --insecure || curl -fsS -o /dev/null -w "healthz direct: %{http_code}\n" \
+              http://127.0.0.1:8000/healthz 2>/dev/null || true'
