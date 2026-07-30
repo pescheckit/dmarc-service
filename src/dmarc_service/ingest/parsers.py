@@ -7,6 +7,7 @@ untrusted (defusedxml, size-capped upstream, zip taken one member at a time).
 """
 
 import gzip
+import hashlib
 import io
 import json
 import zipfile
@@ -68,25 +69,55 @@ def _epoch(value: str) -> datetime:
     return datetime.fromtimestamp(int(float(value)), tz=UTC)
 
 
+def _strip_namespaces(root):
+    """Some reporters (GMX/web.de and other United Internet brands) wrap the
+    report in an XML namespace, which would make every plain find() miss."""
+    for element in root.iter():
+        if isinstance(element.tag, str) and "}" in element.tag:
+            element.tag = element.tag.split("}", 1)[1]
+    return root
+
+
 def parse_aggregate_xml(data: bytes) -> ParsedAggregateReport:
-    root = ElementTree.fromstring(data)
+    root = _strip_namespaces(ElementTree.fromstring(data))
+    if root.tag != "feedback":
+        # occasionally the report is wrapped in an outer element
+        nested = root.find(".//feedback")
+        if nested is not None:
+            root = nested
+
     metadata = root.find("report_metadata")
     policy = root.find("policy_published")
-    if metadata is None or policy is None:
-        raise ValueError("not a DMARC aggregate report: missing metadata/policy_published")
+    if metadata is None and policy is None:
+        raise ValueError(
+            f"not a DMARC aggregate report: <{root.tag}> has neither "
+            "report_metadata nor policy_published"
+        )
+
+    # Be lenient about the parts that are only bookkeeping: a report with
+    # records is worth keeping even when a sender omits some metadata.
+    org_name = _text(metadata, "org_name") if metadata is not None else ""
+    report_id = _text(metadata, "report_id") if metadata is not None else ""
+    if not report_id:
+        report_id = hashlib.sha256(data).hexdigest()[:32]
+
+    policy_domain = _text(policy, "domain").lower() if policy is not None else ""
+    if not policy_domain:
+        identifiers = root.find("record/identifiers")
+        policy_domain = _text(identifiers, "header_from").lower() if identifiers is not None else ""
 
     report = ParsedAggregateReport(
-        org_name=_text(metadata, "org_name"),
-        org_email=_text(metadata, "email"),
-        report_id=_text(metadata, "report_id"),
-        date_begin=_epoch(_text(metadata, "date_range/begin", "0")),
-        date_end=_epoch(_text(metadata, "date_range/end", "0")),
-        policy_domain=_text(policy, "domain").lower(),
-        policy_adkim=_text(policy, "adkim", "r"),
-        policy_aspf=_text(policy, "aspf", "r"),
-        policy_p=_text(policy, "p", "none"),
-        policy_sp=_text(policy, "sp"),
-        policy_pct=int(_text(policy, "pct", "100") or 100),
+        org_name=org_name or "unknown",
+        org_email=_text(metadata, "email") if metadata is not None else "",
+        report_id=report_id,
+        date_begin=_epoch(_text(metadata, "date_range/begin", "0") if metadata is not None else "0"),
+        date_end=_epoch(_text(metadata, "date_range/end", "0") if metadata is not None else "0"),
+        policy_domain=policy_domain,
+        policy_adkim=_text(policy, "adkim", "r") if policy is not None else "r",
+        policy_aspf=_text(policy, "aspf", "r") if policy is not None else "r",
+        policy_p=_text(policy, "p", "none") if policy is not None else "none",
+        policy_sp=_text(policy, "sp") if policy is not None else "",
+        policy_pct=int((_text(policy, "pct", "100") if policy is not None else "100") or 100),
     )
 
     for row_parent in root.findall("record"):
@@ -189,7 +220,10 @@ def classify(document: bytes) -> str:
     """aggregate | tlsrpt | unknown"""
     stripped = document.lstrip()
     if stripped.startswith(b"<"):
-        return "aggregate" if b"<feedback" in stripped[:2000] else "unknown"
+        head = stripped[:2000]
+        if b"<feedback" in head or b"report_metadata" in head:
+            return "aggregate"
+        return "unknown"
     if stripped.startswith(b"{"):
         try:
             head = json.loads(stripped)

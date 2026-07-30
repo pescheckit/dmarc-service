@@ -229,40 +229,52 @@ def process_upload(session: Session, filename: str, content: bytes) -> dict:
 
     stored = {"aggregate": 0, "tlsrpt": 0, "skipped": 0}
     unreadable = 0
+    problems: list[str] = []
     for document in documents:
         kind = parsers.classify(document)
-        if kind == "aggregate":
-            parsed = parsers.parse_aggregate_xml(document)
-            domain = session.scalar(select(Domain).where(Domain.name == parsed.policy_domain))
-            if _store_aggregate(
-                session, parsed, raw, domain.tenant_id if domain else None,
-                domain.id if domain else None,
-            ):
-                stored["aggregate"] += 1
-            else:
-                stored["skipped"] += 1
-        elif kind == "tlsrpt":
-            parsed_tls = parsers.parse_tlsrpt_json(document)
-            domain = None
-            if parsed_tls.policy_domains:
-                domain = session.scalar(
-                    select(Domain).where(Domain.name == parsed_tls.policy_domains[0])
-                )
-            if _store_tlsrpt(
-                session, parsed_tls, raw, domain.tenant_id if domain else None,
-                domain.id if domain else None, source="upload",
-            ):
-                stored["tlsrpt"] += 1
-            else:
-                stored["skipped"] += 1
-        else:
+        try:
+            _store_upload_document(session, document, kind, raw, stored)
+        except Exception as exc:  # noqa: BLE001 - one bad document must not
+            problems.append(str(exc))  # discard the rest of the archive
             unreadable += 1
-
     if not stored["aggregate"] and not stored["tlsrpt"] and not stored["skipped"]:
-        raise ValueError(f"no DMARC or TLS-RPT documents found in {filename}")
-
+        raw.status = "failed"
+        raw.error = "; ".join(problems)[:2000]
+        raise ValueError(
+            problems[0] if problems else f"no DMARC or TLS-RPT documents found in {filename}"
+        )
     session.flush()
     return stored
+
+
+def _store_upload_document(session, document, kind, raw, stored) -> None:
+    """Store one uploaded document; raises if it is not a usable report."""
+    if kind == "aggregate":
+        parsed = parsers.parse_aggregate_xml(document)
+        domain = session.scalar(select(Domain).where(Domain.name == parsed.policy_domain))
+        if _store_aggregate(
+            session, parsed, raw, domain.tenant_id if domain else None,
+            domain.id if domain else None,
+        ):
+            stored["aggregate"] += 1
+        else:
+            stored["skipped"] += 1
+    elif kind == "tlsrpt":
+        parsed_tls = parsers.parse_tlsrpt_json(document)
+        domain = None
+        if parsed_tls.policy_domains:
+            domain = session.scalar(
+                select(Domain).where(Domain.name == parsed_tls.policy_domains[0])
+            )
+        if _store_tlsrpt(
+            session, parsed_tls, raw, domain.tenant_id if domain else None,
+            domain.id if domain else None, source="upload",
+        ):
+            stored["tlsrpt"] += 1
+        else:
+            stored["skipped"] += 1
+    else:
+        raise ValueError("not a DMARC or TLS-RPT document")
 
 
 def process_tlsrpt_http(session: Session, document: bytes) -> bool:

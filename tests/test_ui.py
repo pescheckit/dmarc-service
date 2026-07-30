@@ -219,4 +219,4 @@ def test_upload_zip_and_gz(client, aggregate_xml, tlsrpt_json):
         "/upload", files=[("files", ("notes.txt", b"just some text", "text/plain"))],
         follow_redirects=True,
     ).text
-    assert "no DMARC or TLS-RPT documents" in page
+    assert "not a DMARC or TLS-RPT document" in page

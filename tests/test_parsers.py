@@ -60,3 +60,37 @@ def test_xxe_is_rejected():
     except Exception:
         return  # defusedxml refused it, good
     raise AssertionError("XXE payload was not rejected")
+
+
+def test_parse_namespaced_report():
+    """GMX/web.de wrap the report in an XML namespace."""
+    from pathlib import Path
+
+    data = (Path(__file__).parent / "fixtures" / "namespaced_aggregate.xml").read_bytes()
+    assert parsers.classify(data) == "aggregate"
+    report = parsers.parse_aggregate_xml(data)
+    assert report.org_name == "GMX"
+    assert report.policy_domain == "example.com"
+    assert len(report.records) == 2
+    assert report.records[0].count == 7
+
+
+def test_parse_report_without_metadata():
+    """A report missing bookkeeping is still worth keeping if it has records."""
+    xml = b"""<?xml version="1.0"?><feedback>
+      <policy_published><domain>example.com</domain><p>none</p></policy_published>
+      <record><row><source_ip>1.2.3.4</source_ip><count>5</count>
+        <policy_evaluated><disposition>none</disposition><dkim>pass</dkim><spf>pass</spf></policy_evaluated>
+      </row><identifiers><header_from>example.com</header_from></identifiers></record>
+    </feedback>"""
+    report = parsers.parse_aggregate_xml(xml)
+    assert report.org_name == "unknown"
+    assert report.report_id  # synthesised from the document hash
+    assert report.records[0].count == 5
+
+
+def test_non_report_xml_still_rejected():
+    import pytest
+
+    with pytest.raises(ValueError):
+        parsers.parse_aggregate_xml(b"<html><body>not a report</body></html>")
