@@ -1,0 +1,28 @@
+dmarc-service {{ .Chart.AppVersion }} deployed.
+
+{{- if .Values.web.enabled }}
+
+Web/API:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "dmarc-service.fullname" . }}-web {{ .Values.web.service.port }}:{{ .Values.web.service.port }}
+{{- if .Values.web.ingress.enabled }}
+  or https://{{ .Values.web.ingress.host | default .Values.reportHost }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.smtp.enabled }}
+
+SMTP intake ({{ .Values.smtp.mode }} mode):
+{{- if eq .Values.smtp.service.type "LoadBalancer" }}
+  kubectl -n {{ .Release.Namespace }} get svc {{ include "dmarc-service.fullname" . }}-smtp
+  Point your MX at the EXTERNAL-IP above (DNS-only / unproxied A record!).
+{{- else }}
+  Service type {{ .Values.smtp.service.type }} — expose port 25 to the internet yourself.
+{{- end }}
+{{- end }}
+
+Next steps (control plane):
+  1. POST /api/tenants                {"slug": "...", "name": "..."}
+  2. POST /api/tenants/<slug>/domains {"name": "yourdomain.tld"}
+  3. GET  /api/domains/<name>/dns  ->  publish exactly these records.
+
+Reports typically start arriving within 24h of publishing the DNS records.

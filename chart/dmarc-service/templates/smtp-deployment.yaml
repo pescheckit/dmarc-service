@@ -1,0 +1,118 @@
+{{- if .Values.smtp.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dmarc-service.fullname" . }}-smtp
+  labels:
+    {{- include "dmarc-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: smtp
+spec:
+  replicas: {{ .Values.smtp.replicas }}
+  selector:
+    matchLabels:
+      {{- include "dmarc-service.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: smtp
+  template:
+    metadata:
+      labels:
+        {{- include "dmarc-service.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: smtp
+      {{- with .Values.smtp.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "dmarc-service.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: smtp
+          image: {{ include "dmarc-service.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["smtp"]
+          ports:
+            - name: smtp
+              containerPort: 2525
+          env:
+            - name: SMTP_MODE
+              value: {{ .Values.smtp.mode | quote }}
+            - name: SMTP_MAX_MESSAGE_BYTES
+              value: {{ .Values.smtp.maxMessageBytes | quote }}
+            {{- if eq .Values.smtp.mode "forward" }}
+            - name: SMTP_FORWARD_URL
+              value: {{ required "smtp.forward.url is required when smtp.mode=forward" .Values.smtp.forward.url | quote }}
+            {{- if .Values.auth.existingSecret }}
+            - name: SMTP_FORWARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: INGEST_TOKEN
+            {{- else if .Values.auth.ingestToken }}
+            - name: SMTP_FORWARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dmarc-service.fullname" . }}
+                  key: INGEST_TOKEN
+            {{- end }}
+            {{- else }}
+            {{- include "dmarc-service.coreEnv" . | nindent 12 }}
+            {{- end }}
+            {{- if .Values.smtp.tls.existingSecret }}
+            - name: SMTP_TLS_CERT
+              value: /tls/tls.crt
+            - name: SMTP_TLS_KEY
+              value: /tls/tls.key
+            {{- end }}
+            {{- with .Values.smtp.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            tcpSocket:
+              port: smtp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: smtp
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          {{- with .Values.smtp.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            {{- if .Values.smtp.tls.existingSecret }}
+            - name: smtp-tls
+              mountPath: /tls
+              readOnly: true
+            {{- end }}
+            {{- if eq .Values.smtp.mode "direct" }}
+            {{- include "dmarc-service.dataVolumeMount" . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if .Values.smtp.tls.existingSecret }}
+        - name: smtp-tls
+          secret:
+            secretName: {{ .Values.smtp.tls.existingSecret }}
+        {{- end }}
+        {{- if eq .Values.smtp.mode "direct" }}
+        {{- include "dmarc-service.dataVolume" . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

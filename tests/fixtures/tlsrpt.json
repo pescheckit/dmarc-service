@@ -1,0 +1,30 @@
+{
+  "organization-name": "Google Inc.",
+  "date-range": {
+    "start-datetime": "2026-07-21T00:00:00Z",
+    "end-datetime": "2026-07-21T23:59:59Z"
+  },
+  "contact-info": "smtp-tls-reporting@google.com",
+  "report-id": "2026-07-21T00:00:00Z_example.com",
+  "policies": [
+    {
+      "policy": {
+        "policy-type": "sts",
+        "policy-string": ["version: STSv1", "mode: testing", "mx: mx.example.com", "max_age: 86400"],
+        "policy-domain": "example.com"
+      },
+      "summary": {
+        "total-successful-session-count": 512,
+        "total-failure-session-count": 1
+      },
+      "failure-details": [
+        {
+          "result-type": "certificate-expired",
+          "sending-mta-ip": "198.51.100.34",
+          "receiving-mx-hostname": "mx.example.com",
+          "failed-session-count": 1
+        }
+      ]
+    }
+  ]
+}

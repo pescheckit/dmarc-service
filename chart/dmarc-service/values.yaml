@@ -1,0 +1,96 @@
+image:
+  repository: ghcr.io/pescheck/dmarc-service
+  tag: ""  # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Hostname report addresses live under (<random>@<reportHost>) and public
+# base URL of the web app (used in generated TLS-RPT records).
+reportHost: dmarc.example.com
+externalUrl: https://dmarc.example.com
+
+tenancy:
+  mode: multi  # multi | single
+controlPlane:
+  enabled: true
+
+# Database, in order of precedence:
+# 1. existingSecret: read the URL from your own Secret (key: secretKey)
+# 2. url: put the URL in plain values (chart renders its own Secret)
+# 3. neither: SQLite on a PVC (enable persistence; single-replica installs
+#    only, and smtp must run in forward mode or share the web pod's volume)
+database:
+  existingSecret: ""
+  secretKey: DATABASE_URL
+  url: ""
+
+persistence:  # only used for the SQLite fallback
+  enabled: false
+  size: 1Gi
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+
+auth:
+  # Bearer token required on /api/* (empty = API open; protect it upstream).
+  apiToken: ""
+  # Token forward-mode edges use against /api/ingest (empty = endpoint off).
+  ingestToken: ""
+  # Or bring your own Secret with keys API_TOKEN / INGEST_TOKEN.
+  existingSecret: ""
+
+web:
+  enabled: true  # disable for an edge-only install (smtp.mode=forward)
+  replicas: 1
+  resources: {}
+  extraEnv: []
+  podAnnotations: {}
+  service:
+    type: ClusterIP
+    port: 8000
+  ingress:
+    enabled: false
+    className: ""  # e.g. nginx; left empty, no ingressClassName is set
+    annotations: {}
+    host: ""  # defaults to reportHost
+    tls:
+      enabled: false
+      secretName: ""  # defaults to <host>-tls when cert-manager is used
+    certManager:
+      clusterIssuer: ""  # sets cert-manager.io/cluster-issuer when non-empty
+
+smtp:
+  enabled: true
+  mode: direct  # direct (store to DB) | forward (relay to another instance)
+  forward:
+    url: ""  # e.g. https://dmarc.example.com/api/ingest
+    # token defaults to auth.ingestToken / auth.existingSecret INGEST_TOKEN
+  replicas: 1
+  resources: {}
+  extraEnv: []
+  podAnnotations: {}
+  maxMessageBytes: 52428800  # 50 MB; don't lower it much, see README
+  service:
+    type: LoadBalancer  # LoadBalancer | NodePort | ClusterIP
+    port: 25
+    nodePort: null  # set when type=NodePort and you need a fixed port
+    annotations: {}  # cloud LB annotations (proxy protocol off! plain TCP)
+    # Local preserves real sender IPs; requires the LB to health-check nodes.
+    externalTrafficPolicy: Local
+  tls:
+    # Secret with tls.crt/tls.key to offer STARTTLS. Optional: inbound
+    # report mail is opportunistic TLS; plaintext is accepted either way.
+    existingSecret: ""
+
+migrate:
+  enabled: true  # pre-install/pre-upgrade Job running schema migrations
+
+serviceAccount:
+  create: false
+  name: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

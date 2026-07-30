@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: dmarc
+      POSTGRES_PASSWORD: dmarc
+      POSTGRES_DB: dmarc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dmarc"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    build: .
+    command: ["migrate"]
+    environment: &app_env
+      DATABASE_URL: postgresql+psycopg://dmarc:dmarc@postgres:5432/dmarc
+      REPORT_HOST: dmarc.localtest.me
+      EXTERNAL_URL: http://localhost:8000
+      INGEST_TOKEN: local-ingest-token
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: .
+    command: ["web"]
+    environment: *app_env
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  smtp:
+    build: .
+    command: ["smtp"]
+    environment: *app_env
+    ports:
+      - "2525:2525"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Example of the edge/forward topology: a second, stateless SMTP receiver
+  # that relays everything to the web app over HTTP. This is what you run on
+  # an external VPS when your main cloud blocks inbound port 25.
+  smtp-edge:
+    build: .
+    command: ["smtp"]
+    environment:
+      SMTP_MODE: forward
+      SMTP_FORWARD_URL: http://web:8000/api/ingest
+      SMTP_FORWARD_TOKEN: local-ingest-token
+    ports:
+      - "2526:2525"
+    depends_on:
+      - web
+
+volumes:
+  postgres-data:

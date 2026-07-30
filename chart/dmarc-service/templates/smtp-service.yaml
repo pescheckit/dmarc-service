@@ -1,0 +1,28 @@
+{{- if .Values.smtp.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmarc-service.fullname" . }}-smtp
+  labels:
+    {{- include "dmarc-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: smtp
+  {{- with .Values.smtp.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.smtp.service.type }}
+  {{- if eq .Values.smtp.service.type "LoadBalancer" }}
+  externalTrafficPolicy: {{ .Values.smtp.service.externalTrafficPolicy }}
+  {{- end }}
+  selector:
+    {{- include "dmarc-service.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: smtp
+  ports:
+    - name: smtp
+      port: {{ .Values.smtp.service.port }}
+      targetPort: smtp
+      {{- if and (eq .Values.smtp.service.type "NodePort") .Values.smtp.service.nodePort }}
+      nodePort: {{ .Values.smtp.service.nodePort }}
+      {{- end }}
+{{- end }}
