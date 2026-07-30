@@ -246,9 +246,25 @@ def reprocess(session: Session, limit: int = 1000) -> dict:
         domain_id = known.domain_id if known else None
 
         try:
-            parsed, stored = _store_reports(
-                session, message_from_bytes(raw.content), raw, tenant_id, domain_id
-            )
+            if raw.mail_from == "upload":
+                # Uploads are stored as the file itself, not a MIME message.
+                documents = parsers.decompress(raw.content, raw.rcpt_to)
+                parsed = stored = 0
+                for document in documents:
+                    kind = parsers.classify(document)
+                    if kind not in ("aggregate", "tlsrpt"):
+                        continue
+                    parsed += 1
+                    try:
+                        _store_upload_document(session, document, kind, raw, counts_stub := {
+                            "aggregate": 0, "tlsrpt": 0, "skipped": 0})
+                        stored += counts_stub["aggregate"] + counts_stub["tlsrpt"]
+                    except Exception:  # noqa: BLE001 - try the next document
+                        continue
+            else:
+                parsed, stored = _store_reports(
+                    session, message_from_bytes(raw.content), raw, tenant_id, domain_id
+                )
         except Exception as exc:  # noqa: BLE001 - keep going through the batch
             raw.status, raw.error = "failed", str(exc)[:2000]
             counts["still_failing"] += 1
