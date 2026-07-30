@@ -688,6 +688,7 @@ def settings_page(request: Request):
             ]
         new_token = request.session.pop("new_token", None)
         settings_error = request.session.pop("settings_error", "")
+        settings_notice = request.session.pop("settings_notice", "")
         return templates.TemplateResponse(
             request,
             "settings.html",
@@ -697,6 +698,8 @@ def settings_page(request: Request):
                 tokens=tokens,
                 new_token=new_token,
                 settings_error=settings_error,
+                settings_notice=settings_notice,
+                has_password=user.password_hash is not None,
                 users=users,
                 sso={
                     "configured": provider is not None,
@@ -726,6 +729,28 @@ def revoke_token(request: Request, token_id: int):
         if user is None:
             return _login_redirect(db)
         auth.revoke_api_token(db, user, token_id)
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/password")
+def change_password(
+    request: Request,
+    current_password: str = Form(""),
+    new_password: str = Form(...),
+):
+    """Anyone may set their own password, including accounts provisioned by
+    SSO: without one, a broken SSO configuration locks them out entirely."""
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        if len(new_password) < 8:
+            request.session["settings_error"] = "password must be at least 8 characters"
+        elif user.password_hash and auth.authenticate(db, user.email, current_password) is None:
+            request.session["settings_error"] = "current password is wrong"
+        else:
+            auth.set_password(db, user, new_password)
+            request.session["settings_notice"] = "password updated"
     return RedirectResponse("/settings", status_code=303)
 
 

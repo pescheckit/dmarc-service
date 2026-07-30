@@ -11,6 +11,18 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("smtp", help="run the SMTP report receiver")
     sub.add_parser("migrate", help="create/upgrade the database schema")
     sub.add_parser("enrich", help="resolve owners for source IPs seen in reports")
+
+    # Break-glass: run these on the server when nobody can sign in, for
+    # example after an SSO misconfiguration locked out the only admin.
+    set_password = sub.add_parser(
+        "set-password", help="set a user's password (creates the user if needed)"
+    )
+    set_password.add_argument("email")
+    set_password.add_argument("--password", help="read from stdin prompt when omitted")
+    set_password.add_argument("--admin", action="store_true", help="also make them an admin")
+
+    disable_sso = sub.add_parser("disable-sso", help="remove the SSO provider configuration")
+    disable_sso.add_argument("--yes", action="store_true", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "web":
@@ -36,6 +48,35 @@ def main(argv: list[str] | None = None) -> None:
 
         with session_scope() as db:
             print(f"resolved {backfill(db)} IP(s)")
+    elif args.command == "set-password":
+        import getpass
+
+        from sqlalchemy import select
+
+        from dmarc_service.auth import service as auth
+        from dmarc_service.db.models import User
+        from dmarc_service.db.session import session_scope
+
+        password = args.password or getpass.getpass("New password: ")
+        if len(password) < 8:
+            sys.exit("password must be at least 8 characters")
+        with session_scope() as db:
+            user = db.scalar(select(User).where(User.email == args.email.lower()))
+            if user is None:
+                user = auth.create_user(db, args.email, password, is_admin=args.admin)
+                print(f"created {user.email}")
+            else:
+                auth.set_password(db, user, password)
+                if args.admin:
+                    user.is_admin = True
+                print(f"password updated for {user.email}")
+    elif args.command == "disable-sso":
+        from dmarc_service.auth import service as auth
+        from dmarc_service.db.session import session_scope
+
+        with session_scope() as db:
+            auth.remove_provider(db)
+        print("SSO configuration removed; password sign-in still works")
     else:  # pragma: no cover
         sys.exit(2)
 

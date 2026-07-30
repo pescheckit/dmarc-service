@@ -57,6 +57,11 @@ def find_or_provision_sso_user(session: Session, email: str) -> User:
     return user
 
 
+def set_password(session: Session, user: User, password: str) -> None:
+    user.password_hash = _hasher.hash(password) if password else None
+    session.flush()
+
+
 def admin_count(session: Session) -> int:
     return session.scalar(select(func.count(User.id)).where(User.is_admin.is_(True))) or 0
 

@@ -324,3 +324,43 @@ def test_non_admin_cannot_change_roles(client, monkeypatch):
     client.get("/auth/sso/callback?code=x&state=y")  # now signed in as the regular user
     response = client.post("/settings/users/colleague@b.nl/role", data={"make_admin": "1"})
     assert response.status_code == 403
+
+
+def test_sso_user_can_set_a_password_to_avoid_lockout(client, monkeypatch):
+    import dmarc_service.api.ui as ui
+
+    client.post("/setup", data={"email": "admin@b.nl", "password": "longenough"})
+    client.post("/settings/sso", data={"name": "Entra", "issuer": "https://issuer.example",
+                                       "client_id": "abc", "client_secret": "xyz"})
+    client.post("/logout")
+
+    class FakeClient:
+        async def authorize_access_token(self, request):
+            return {"userinfo": {"email": "niels@b.nl"}}
+
+    monkeypatch.setattr(ui, "_oauth_client", lambda p: FakeClient())
+    client.get("/auth/sso/callback?code=x&state=y")
+
+    # the SSO-only account is warned and offered a password
+    page = client.get("/settings").text
+    assert "can only sign in through SSO" in page
+    assert "Set password" in page
+
+    client.post("/settings/password", data={"new_password": "fallback-pass"})
+    assert "can only sign in through SSO" not in client.get("/settings").text
+
+    # the password now works even if SSO breaks
+    client.post("/logout")
+    response = client.post("/login", data={"email": "niels@b.nl", "password": "fallback-pass"},
+                           follow_redirects=False)
+    assert response.status_code == 303
+
+
+def test_password_change_requires_the_current_one(client):
+    client.post("/setup", data={"email": "admin@b.nl", "password": "longenough"})
+    page = client.post("/settings/password",
+                       data={"current_password": "wrong", "new_password": "newpassword"}).text
+    assert "current password is wrong" in page
+    page = client.post("/settings/password",
+                       data={"current_password": "longenough", "new_password": "newpassword"}).text
+    assert "password updated" in page

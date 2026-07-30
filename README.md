@@ -74,6 +74,10 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
   Workspace, Keycloak, Okta, ...) in Settings; SSO users are auto-provisioned.
 - Administrators can promote or demote other users in Settings; the last
   administrator cannot be demoted, so an installation always has one.
+- Anyone, including SSO-provisioned users, can set a password as a fallback,
+  and accounts without one are warned: a broken SSO configuration would
+  otherwise lock them out. If it happens anyway, `dmarc-service set-password`
+  and `dmarc-service disable-sso` recover an installation from the server.
 - Every user can mint **personal API tokens** (hashed at rest, shown once) for
   `Authorization: Bearer` on `/api/*`; a static `API_TOKEN` is also supported
   for automation.
