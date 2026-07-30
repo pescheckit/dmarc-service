@@ -80,6 +80,30 @@ def resolve_address(session: Session, local_part: str) -> ReportAddress | None:
     )
 
 
+def delete_domain(session: Session, domain: Domain) -> None:
+    """Remove a domain and its addresses. Historical reports are kept but
+    unlinked, so past data stays queryable per tenant."""
+    from dmarc_service.db.models import AggregateReport, TlsReport
+
+    for report in session.scalars(
+        select(AggregateReport).where(AggregateReport.domain_id == domain.id)
+    ):
+        report.domain_id = None
+    for report in session.scalars(select(TlsReport).where(TlsReport.domain_id == domain.id)):
+        report.domain_id = None
+    for address in list(domain.addresses):
+        session.delete(address)
+    session.delete(domain)
+
+
+def delete_tenant(session: Session, tenant: Tenant) -> bool:
+    """Only empty tenants can be deleted; returns False otherwise."""
+    if tenant.domains:
+        return False
+    session.delete(tenant)
+    return True
+
+
 @dataclass
 class DnsRecord:
     zone: str  # which DNS zone the record belongs in
@@ -89,6 +113,9 @@ class DnsRecord:
     # tenant: published by the domain owner; operator: published by whoever
     # runs this service (matters when they are different parties)
     published_by: str
+    # substring whose presence in a live TXT answer counts as "published"
+    # (records may legitimately carry extra rua entries during migrations)
+    must_contain: str = ""
 
 
 def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
@@ -97,6 +124,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
     addresses = active_addresses(session, domain)
     mailtos = ",".join(f"mailto:{a.local_part}@{report_host}" for a in addresses)
 
+    any_mailto = f"@{report_host}"
     records = [
         DnsRecord(
             zone=domain.name,
@@ -104,6 +132,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
             type="TXT",
             content=f"v=DMARC1; p=none; rua={mailtos}",
             published_by="tenant",
+            must_contain=any_mailto,
         ),
         DnsRecord(
             zone=domain.name,
@@ -111,6 +140,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
             type="TXT",
             content=f"v=TLSRPTv1; rua={settings.external_url}/tlsrpt,{mailtos}",
             published_by="tenant",
+            must_contain=any_mailto,
         ),
     ]
 
@@ -126,6 +156,56 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
                 type="TXT",
                 content="v=DMARC1",
                 published_by="operator",
+                must_contain="v=DMARC1",
             )
         )
     return records
+
+
+# --- live DNS verification ---
+
+
+def _resolve_txt(name: str) -> list[str] | None:
+    """Returns TXT answers, [] when the name exists without TXT data, or
+    None when resolution failed (treat as unknown, not missing)."""
+    import dns.resolver
+
+    try:
+        answers = dns.resolver.resolve(name, "TXT", lifetime=3.0)
+        return ["".join(s.decode() for s in r.strings) for r in answers]
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+        return []
+    except Exception:  # timeout, servfail, no network — unknown, not missing
+        return None
+
+
+def check_dns_records(records: list[DnsRecord]) -> list[dict]:
+    """Verify each expected record against live DNS.
+
+    Status per record: ok (published), missing (nothing there), mismatch
+    (TXT exists but doesn't contain ours — e.g. stale record), unknown
+    (lookup failed).
+    """
+    results = []
+    for record in records:
+        answers = _resolve_txt(record.name)
+        if answers is None:
+            status = "unknown"
+        elif not answers:
+            status = "missing"
+        elif any(record.must_contain in answer for answer in answers):
+            status = "ok"
+        else:
+            status = "mismatch"
+        results.append(
+            {
+                "zone": record.zone,
+                "name": record.name,
+                "type": record.type,
+                "content": record.content,
+                "published_by": record.published_by,
+                "status": status,
+                "found": answers or [],
+            }
+        )
+    return results

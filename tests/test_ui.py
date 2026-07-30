@@ -110,3 +110,34 @@ def test_report_detail_and_docs(client, aggregate_xml):
     client.post("/logout")
     assert client.get("/docs").status_code == 200
     assert "/api/reports" in client.get("/openapi.json").text
+
+
+def test_dns_check_and_deletion(client, monkeypatch):
+    from dmarc_service.control_plane import service as control_plane
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "example.com"})
+
+    # fake resolver: _dmarc published (with extra legacy rua), tlsrpt missing
+    def fake_resolve(name):
+        if name.startswith("_dmarc."):
+            return ["v=DMARC1; p=none; rua=mailto:x@dmarc.reporthost.net,mailto:old@legacy.example"]
+        if name.startswith("_smtp._tls."):
+            return []
+        return ["v=DMARC1"]
+
+    monkeypatch.setattr(control_plane, "_resolve_txt", fake_resolve)
+
+    page = client.get("/domains/example.com").text
+    assert "✓ published" in page
+    assert "✗ missing" in page
+
+    tenants = client.get("/tenants").text
+    assert "2/3 live" in tenants  # _dmarc ok + EDV ok, _smtp._tls missing
+
+    # delete domain, then tenant
+    assert client.post("/domains/example.com/delete", follow_redirects=False).status_code == 303
+    assert client.get("/domains/example.com").status_code == 404
+    assert client.post("/tenants/acme/delete", follow_redirects=False).status_code == 303
+    assert "acme" not in client.get("/tenants").text

@@ -177,13 +177,22 @@ def tenants_page(request: Request, error: str = ""):
             return _login_redirect(db)
         tenants = []
         for tenant in db.scalars(select(Tenant).order_by(Tenant.slug)):
-            domains = [
-                {
-                    "name": d.name,
-                    "addresses": [a.local_part for a in control_plane.active_addresses(db, d)],
-                }
-                for d in tenant.domains
-            ]
+            domains = []
+            for d in tenant.domains:
+                checks = control_plane.check_dns_records(
+                    control_plane.required_dns_records(db, d)
+                )
+                ok = sum(1 for c in checks if c["status"] == "ok")
+                domains.append(
+                    {
+                        "name": d.name,
+                        "addresses": [
+                            a.local_part for a in control_plane.active_addresses(db, d)
+                        ],
+                        "dns_ok": ok,
+                        "dns_total": len(checks),
+                    }
+                )
             tenants.append({"slug": tenant.slug, "name": tenant.name, "domains": domains})
         return templates.TemplateResponse(
             request,
@@ -234,7 +243,7 @@ def domain_page(request: Request, name: str):
         domain = db.scalar(select(Domain).where(Domain.name == name.lower()))
         if domain is None:
             raise HTTPException(status_code=404, detail="domain not found")
-        dns = control_plane.required_dns_records(db, domain)
+        dns = control_plane.check_dns_records(control_plane.required_dns_records(db, domain))
         addresses = [
             {"local_part": a.local_part, "active": a.active}
             for a in sorted(domain.addresses, key=lambda a: (not a.active, a.local_part))
@@ -316,6 +325,35 @@ def report_page(request: Request, report_id: int):
             "report.html",
             _ctx(request, user, report=_report_row(db, report), records=records),
         )
+
+
+@router.post("/domains/{name}/delete")
+def delete_domain_form(request: Request, name: str):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        domain = db.scalar(select(Domain).where(Domain.name == name.lower()))
+        if domain is None:
+            raise HTTPException(status_code=404, detail="domain not found")
+        control_plane.delete_domain(db, domain)
+    return RedirectResponse("/tenants", status_code=303)
+
+
+@router.post("/tenants/{slug}/delete")
+def delete_tenant_form(request: Request, slug: str):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
+        if tenant is None:
+            raise HTTPException(status_code=404, detail="tenant not found")
+        if not control_plane.delete_tenant(db, tenant):
+            return RedirectResponse(
+                "/tenants?error=delete+the+tenant%27s+domains+first", status_code=303
+            )
+    return RedirectResponse("/tenants", status_code=303)
 
 
 # --- settings: personal API tokens + admin (SSO, users) ---

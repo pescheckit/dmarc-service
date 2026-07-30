@@ -7,7 +7,7 @@
   <p class="muted">Copy these exactly. Records marked <em>operator</em> are published by whoever
   runs this service ({{ report_host }}); <em>tenant</em> records go in the domain's own zone.</p>
   <table>
-    <thead><tr><th>Name</th><th>Type</th><th>Content</th><th>Published by</th></tr></thead>
+    <thead><tr><th>Name</th><th>Type</th><th>Content</th><th>Published by</th><th>Live check</th></tr></thead>
     <tbody>
       {% for r in dns %}
       <tr>
@@ -15,6 +15,14 @@
         <td>{{ r.type }}</td>
         <td><code class="rec">{{ r.content }}</code></td>
         <td>{{ r.published_by }}</td>
+        <td>
+          {% if r.status == "ok" %}<span class="ok">✓ published</span>
+          {% elif r.status == "missing" %}<span class="bad">✗ missing</span>
+          {% elif r.status == "mismatch" %}<span class="warn">≠ different record found</span>
+            <div class="muted"><code class="rec">{{ r.found | join(" · ") }}</code></div>
+          {% else %}<span class="muted">? lookup failed</span>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -43,6 +51,12 @@
   </table>
   <form method="post" action="/domains/{{ domain.name }}/addresses/mint" style="margin-top:.6rem">
     <button>Mint new address (rotation)</button>
+  </form>
+
+  <h2>Danger zone</h2>
+  <form method="post" action="/domains/{{ domain.name }}/delete"
+        onsubmit="return confirm('Delete {{ domain.name }}? Its report addresses stop working immediately; stored reports are kept.')">
+    <button>Delete domain</button>
   </form>
 
   <h2>Recent reports</h2>

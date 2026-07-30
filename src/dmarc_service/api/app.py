@@ -177,11 +177,16 @@ def add_domain(slug: str, body: DomainIn):
 
 
 @app.get("/api/domains/{name}/dns", dependencies=[Depends(require_api_token)])
-def domain_dns(name: str):
+def domain_dns(name: str, verify: bool = False):
+    """Required DNS records; with ?verify=true each record gets a live-DNS
+    status (ok | missing | mismatch | unknown) and the answers found."""
     with session_scope() as db:
         domain = db.scalar(select(Domain).where(Domain.name == name.lower()))
         if domain is None:
             raise HTTPException(status_code=404, detail="domain not found")
+        records = control_plane.required_dns_records(db, domain)
+        if verify:
+            return control_plane.check_dns_records(records)
         return [
             {
                 "zone": r.zone,
@@ -190,8 +195,29 @@ def domain_dns(name: str):
                 "content": r.content,
                 "published_by": r.published_by,
             }
-            for r in control_plane.required_dns_records(db, domain)
+            for r in records
         ]
+
+
+@app.delete("/api/domains/{name}", dependencies=[Depends(require_api_token)])
+def delete_domain(name: str):
+    with session_scope() as db:
+        domain = db.scalar(select(Domain).where(Domain.name == name.lower()))
+        if domain is None:
+            raise HTTPException(status_code=404, detail="domain not found")
+        control_plane.delete_domain(db, domain)
+        return {"deleted": name}
+
+
+@app.delete("/api/tenants/{slug}", dependencies=[Depends(require_api_token)])
+def delete_tenant(slug: str):
+    with session_scope() as db:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
+        if tenant is None:
+            raise HTTPException(status_code=404, detail="tenant not found")
+        if not control_plane.delete_tenant(db, tenant):
+            raise HTTPException(status_code=409, detail="tenant still has domains")
+        return {"deleted": slug}
 
 
 @app.post(
