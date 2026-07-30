@@ -128,6 +128,7 @@ def test_dns_check_and_deletion(client, monkeypatch):
         return ["v=DMARC1"]
 
     monkeypatch.setattr(control_plane, "_resolve_txt", fake_resolve)
+    control_plane.clear_dns_cache()  # drop lookups cached before the patch
 
     page = client.get("/domains/example.com").text
     assert "✓ published" in page

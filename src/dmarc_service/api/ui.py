@@ -266,7 +266,9 @@ def domain_page(request: Request, name: str):
         domain = db.scalar(select(Domain).where(Domain.name == name.lower()))
         if domain is None:
             raise HTTPException(status_code=404, detail="domain not found")
-        dns = control_plane.check_dns_records(control_plane.required_dns_records(db, domain))
+        required = control_plane.required_dns_records(db, domain)
+        dns = control_plane.check_dns_records(required)
+        checked_age = control_plane.dns_checked_age([r.name for r in required])
         addresses = [
             {"local_part": a.local_part, "active": a.active}
             for a in sorted(domain.addresses, key=lambda a: (not a.active, a.local_part))
@@ -282,7 +284,12 @@ def domain_page(request: Request, name: str):
             request,
             "domain.html",
             _ctx(request, user, domain={"name": domain.name}, dns=dns,
-                 addresses=addresses, reports=rows),
+                 addresses=addresses, reports=rows,
+                 checked_age=int(checked_age) if checked_age is not None else None,
+                 recheck_wait=int(control_plane.DNS_RECHECK_INTERVAL - checked_age)
+                 if checked_age is not None
+                 and checked_age < control_plane.DNS_RECHECK_INTERVAL
+                 else 0),
         )
 
 
@@ -509,6 +516,20 @@ def reports_page(request: Request, domain: str = "", day: str = ""):
             _ctx(request, user, reports=rows, domains=domains, domain=domain,
                  day=picked.isoformat() if picked else ""),
         )
+
+
+@router.post("/domains/{name}/dns/recheck")
+def recheck_dns(request: Request, name: str):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        domain = db.scalar(select(Domain).where(Domain.name == name.lower()))
+        if domain is None:
+            raise HTTPException(status_code=404, detail="domain not found")
+        required = control_plane.required_dns_records(db, domain)
+        control_plane.force_dns_recheck([r.name for r in required])
+    return RedirectResponse(f"/domains/{name}", status_code=303)
 
 
 @router.post("/domains/{name}/delete")

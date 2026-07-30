@@ -17,10 +17,12 @@ def settings_env(tmp_path, monkeypatch):
     monkeypatch.setenv("API_TOKEN", "")
 
     from dmarc_service.config import get_settings
+    from dmarc_service.control_plane.service import clear_dns_cache
     from dmarc_service.db.session import reset_engine
 
     get_settings.cache_clear()
     reset_engine()
+    clear_dns_cache()
     yield os.environ
     get_settings.cache_clear()
     reset_engine()

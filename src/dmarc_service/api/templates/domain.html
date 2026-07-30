@@ -5,7 +5,16 @@
 
   <h2>DNS records to publish</h2>
   <p class="muted">Copy these exactly. Records marked <em>operator</em> are published by whoever
-  runs this service ({{ report_host }}); <em>tenant</em> records go in the domain's own zone.</p>
+  runs this service ({{ report_host }}); <em>tenant</em> records go in the domain's own zone.
+  {% if checked_age is not none %}Last checked {{ checked_age }}s ago.{% endif %}
+  </p>
+  <form class="inline" method="post" action="/domains/{{ domain.name }}/dns/recheck" style="margin-bottom:.6rem">
+    {% if recheck_wait %}
+    <button disabled title="wait {{ recheck_wait }}s">Re-check DNS (in {{ recheck_wait }}s)</button>
+    {% else %}
+    <button>Re-check DNS now</button>
+    {% endif %}
+  </form>
   <table>
     <thead><tr><th>Name</th><th>Type</th><th>Content</th><th>Published by</th><th>Live check</th></tr></thead>
     <tbody>

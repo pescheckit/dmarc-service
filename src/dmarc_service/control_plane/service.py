@@ -164,6 +164,46 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
 
 # --- live DNS verification ---
 
+# Passive page loads serve cached lookups; the "re-check" button forces a
+# fresh lookup but no more than once per minute, so resolvers stay happy.
+DNS_CACHE_TTL = 900.0
+DNS_RECHECK_INTERVAL = 60.0
+_dns_cache: dict[str, tuple[float, list[str] | None]] = {}
+
+
+def clear_dns_cache() -> None:
+    _dns_cache.clear()
+
+
+def dns_checked_age(names: list[str]) -> float | None:
+    """Seconds since the oldest cached lookup among names; None if uncached."""
+    import time
+
+    ages = [time.monotonic() - _dns_cache[n][0] for n in names if n in _dns_cache]
+    return max(ages) if len(ages) == len(names) else None
+
+
+def force_dns_recheck(names: list[str]) -> bool:
+    """Drop cache entries so the next render re-resolves. Refused (False)
+    when the last check is younger than DNS_RECHECK_INTERVAL."""
+    age = dns_checked_age(names)
+    if age is not None and age < DNS_RECHECK_INTERVAL:
+        return False
+    for name in names:
+        _dns_cache.pop(name, None)
+    return True
+
+
+def _resolve_txt_cached(name: str) -> list[str] | None:
+    import time
+
+    hit = _dns_cache.get(name)
+    if hit and time.monotonic() - hit[0] < DNS_CACHE_TTL:
+        return hit[1]
+    answers = _resolve_txt(name)
+    _dns_cache[name] = (time.monotonic(), answers)
+    return answers
+
 
 def _resolve_txt(name: str) -> list[str] | None:
     """Returns TXT answers, [] when the name exists without TXT data, or
@@ -188,7 +228,7 @@ def check_dns_records(records: list[DnsRecord]) -> list[dict]:
     """
     results = []
     for record in records:
-        answers = _resolve_txt(record.name)
+        answers = _resolve_txt_cached(record.name)
         if answers is None:
             status = "unknown"
         elif not answers:
