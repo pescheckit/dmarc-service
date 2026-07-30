@@ -197,6 +197,73 @@ def _store_tlsrpt(
     return True
 
 
+def process_upload(session: Session, filename: str, content: bytes) -> dict:
+    """Import a manually uploaded report file.
+
+    Accepts what report mail contains in practice: a raw .xml/.json document,
+    a .gz/.zip of one, or a whole .eml message. Reports are attributed by the
+    policy domain inside the document, so uploads work for domains whose
+    address was rotated or that were collected elsewhere.
+    """
+    documents: list[bytes] = []
+    lowered = filename.lower()
+
+    if lowered.endswith((".eml", ".msg")) or content.lstrip()[:5].lower() in (b"from ", b"retur"):
+        documents = parsers.extract_report_payloads(message_from_bytes(content))
+    else:
+        try:
+            documents = parsers.decompress(content, filename)
+        except Exception as exc:  # noqa: BLE001 - corrupt archive
+            raise ValueError(f"could not read {filename}: {exc}") from exc
+
+    raw = RawMessage(
+        source_ip="",
+        mail_from="upload",
+        rcpt_to=filename[:320],
+        size=len(content),
+        content=content,
+        status="routed",
+    )
+    session.add(raw)
+    session.flush()
+
+    stored = {"aggregate": 0, "tlsrpt": 0, "skipped": 0}
+    for document in documents:
+        kind = parsers.classify(document)
+        if kind == "aggregate":
+            parsed = parsers.parse_aggregate_xml(document)
+            domain = session.scalar(select(Domain).where(Domain.name == parsed.policy_domain))
+            if _store_aggregate(
+                session, parsed, raw, domain.tenant_id if domain else None,
+                domain.id if domain else None,
+            ):
+                stored["aggregate"] += 1
+            else:
+                stored["skipped"] += 1
+        elif kind == "tlsrpt":
+            parsed_tls = parsers.parse_tlsrpt_json(document)
+            domain = None
+            if parsed_tls.policy_domains:
+                domain = session.scalar(
+                    select(Domain).where(Domain.name == parsed_tls.policy_domains[0])
+                )
+            if _store_tlsrpt(
+                session, parsed_tls, raw, domain.tenant_id if domain else None,
+                domain.id if domain else None, source="upload",
+            ):
+                stored["tlsrpt"] += 1
+            else:
+                stored["skipped"] += 1
+        else:
+            stored["skipped"] += 1
+
+    if not stored["aggregate"] and not stored["tlsrpt"] and not stored["skipped"]:
+        raise ValueError(f"no DMARC or TLS-RPT documents found in {filename}")
+
+    session.flush()
+    return stored
+
+
 def process_tlsrpt_http(session: Session, document: bytes) -> bool:
     """TLS-RPT delivered via the https rua endpoint (no MIME envelope).
 

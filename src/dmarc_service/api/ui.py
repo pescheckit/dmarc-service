@@ -5,7 +5,7 @@ from datetime import UTC
 from pathlib import Path
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
@@ -488,6 +488,47 @@ def graphs_page(request: Request, domain: str = "", days: int = 30):
                 days=days,
             ),
         )
+
+
+@router.get("/upload", response_class=HTMLResponse)
+def upload_page(request: Request):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        return templates.TemplateResponse(
+            request,
+            "upload.html",
+            _ctx(request, user, result=request.session.pop("upload_result", None)),
+        )
+
+
+@router.post("/upload")
+async def upload_reports(request: Request, files: list[UploadFile] = File(...)):
+    from dmarc_service.ingest.pipeline import process_upload
+
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+
+        totals = {"aggregate": 0, "tlsrpt": 0, "skipped": 0, "files": 0}
+        errors: list[str] = []
+        for upload in files:
+            content = await upload.read()
+            if not content:
+                continue
+            try:
+                stored = process_upload(db, upload.filename or "upload", content)
+            except Exception as exc:  # noqa: BLE001 - report per file, keep going
+                errors.append(f"{upload.filename}: {exc}")
+                continue
+            totals["files"] += 1
+            for key in ("aggregate", "tlsrpt", "skipped"):
+                totals[key] += stored[key]
+
+        request.session["upload_result"] = {**totals, "errors": errors[:10]}
+    return RedirectResponse("/upload", status_code=303)
 
 
 @router.get("/reports", response_class=HTMLResponse)
