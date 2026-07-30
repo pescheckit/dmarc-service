@@ -1,5 +1,5 @@
 image:
-  repository: ghcr.io/pescheck/dmarc-service
+  repository: ghcr.io/pescheckit/dmarc-service
   tag: ""  # defaults to the chart appVersion
   pullPolicy: IfNotPresent
 imagePullSecrets: []

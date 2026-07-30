@@ -1,0 +1,72 @@
+# Single-VPS deployment: everything on one host that allows inbound port 25.
+# Copy this directory, fill in .env (see .env.example), then:
+#   docker compose up -d
+# Caddy obtains/renews the TLS certificate automatically (the DNS A record
+# for $REPORT_HOST must point at this host, ports 80/443/25 open).
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dmarc
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set in .env}
+      POSTGRES_DB: dmarc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dmarc"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    image: ${IMAGE:-ghcr.io/pescheckit/dmarc-service:latest}
+    command: ["migrate"]
+    environment: &app_env
+      DATABASE_URL: postgresql+psycopg://dmarc:${DB_PASSWORD}@postgres:5432/dmarc
+      REPORT_HOST: ${REPORT_HOST:?set in .env}
+      EXTERNAL_URL: https://${REPORT_HOST}
+      API_TOKEN: ${API_TOKEN:-}
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    image: ${IMAGE:-ghcr.io/pescheckit/dmarc-service:latest}
+    command: ["web"]
+    restart: unless-stopped
+    environment: *app_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  smtp:
+    image: ${IMAGE:-ghcr.io/pescheckit/dmarc-service:latest}
+    command: ["smtp"]
+    restart: unless-stopped
+    environment: *app_env
+    ports:
+      - "25:2525"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      REPORT_HOST: ${REPORT_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - web
+
+volumes:
+  postgres-data:
+  caddy-data:

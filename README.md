@@ -62,8 +62,17 @@ curl -X POST localhost:8000/api/tenants/acme/domains -H 'content-type: applicati
 
 ## Deployment
 
-A Helm chart lives in [`chart/dmarc-service`](chart/dmarc-service). It is
-built to adapt to what you *don't* have:
+Two equally supported paths:
+
+**Single VPS** (simplest — one host that allows inbound port 25):
+[`deploy/vps`](deploy/vps) is a ready-made compose file with PostgreSQL, the
+web app, the SMTP receiver in direct mode, and Caddy terminating HTTPS with
+automatic certificates. Copy the directory, fill in `.env`, `docker compose
+up -d`, point your DNS at the host.
+
+**Kubernetes**: a Helm chart lives in
+[`chart/dmarc-service`](chart/dmarc-service). It is built to adapt to what
+you *don't* have:
 
 | You don't have…            | Then…                                                                 |
 |----------------------------|-----------------------------------------------------------------------|

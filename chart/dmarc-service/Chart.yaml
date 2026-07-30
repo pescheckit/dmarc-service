@@ -4,6 +4,6 @@ description: Self-hosted, multi-tenant DMARC / TLS-RPT report collector and view
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/pescheck/dmarc-service
+home: https://github.com/pescheckit/dmarc-service
 sources:
-  - https://github.com/pescheck/dmarc-service
+  - https://github.com/pescheckit/dmarc-service
