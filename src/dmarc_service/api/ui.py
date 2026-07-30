@@ -670,8 +670,19 @@ def settings_page(request: Request):
         provider = auth.get_provider(db)
         users = []
         if user.is_admin:
+            sso_available = provider is not None
             users = [
-                {"email": u.email, "is_admin": u.is_admin, "sso": u.password_hash is None}
+                {
+                    "email": u.email,
+                    "is_admin": u.is_admin,
+                    # what the account can sign in with today, not how it was made
+                    "methods": ", ".join(
+                        filter(None, [
+                            "password" if u.password_hash else "",
+                            "SSO" if sso_available else "",
+                        ])
+                    ) or "none",
+                }
                 for u in db.scalars(select(User).order_by(User.email))
             ]
         new_token = request.session.pop("new_token", None)

@@ -79,13 +79,13 @@
     <h2>Users</h2>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Email</th><th>Role</th><th>Login</th></tr></thead>
+        <thead><tr><th>Email</th><th>Role</th><th>Can sign in with</th></tr></thead>
         <tbody>
           {% for u in users %}
           <tr>
             <td>{{ u.email }}</td>
             <td>{{ "admin" if u.is_admin else "user" }}</td>
-            <td>{{ "SSO" if u.sso else "password" }}</td>
+            <td>{{ u.methods }}</td>
           </tr>
           {% endfor %}
         </tbody>
