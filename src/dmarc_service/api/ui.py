@@ -258,15 +258,9 @@ def tenants_page(request: Request, error: str = ""):
                         "verification_missing": any(c["status"] != "ok" for c in ours),
                     }
                 )
-            tenants.append(
-                {
-                    "slug": tenant.slug,
-                    "name": tenant.name,
-                    "domains": domains,
-                    # the quarantine pseudo-tenant never owns domains directly
-                    "system": tenant.slug == UNROUTED_TENANT_SLUG,
-                }
-            )
+            if tenant.slug == UNROUTED_TENANT_SLUG:
+                continue  # shown as a footnote, not as something to manage
+            tenants.append({"slug": tenant.slug, "name": tenant.name, "domains": domains})
         return templates.TemplateResponse(
             request,
             "tenants.html",
@@ -274,6 +268,9 @@ def tenants_page(request: Request, error: str = ""):
                 request,
                 user,
                 tenants=tenants,
+                quarantined=db.scalar(
+                    select(func.count(RawMessage.id)).where(RawMessage.status == "unrouted")
+                ),
                 operator_records=operator_records,
                 operator_missing=[r for r in operator_records if r["status"] != "ok"],
                 error=error,

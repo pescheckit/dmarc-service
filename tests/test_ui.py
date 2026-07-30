@@ -137,7 +137,7 @@ def test_dns_check_and_deletion(client, monkeypatch):
     tenants = client.get("/tenants").text
     # only the domain owner's own records are counted; the operator's
     # verification record is reported separately
-    assert "1/2 live" in tenants
+    assert "1 of 2 published" in tenants
 
     # delete domain, then tenant
     assert client.post("/domains/example.com/delete", follow_redirects=False).status_code == 303
@@ -479,7 +479,7 @@ def test_domains_page_lists_the_dns_the_operator_must_publish(client, monkeypatc
     cp.clear_dns_cache()
 
     page = client.get("/tenants").text
-    assert "Records you publish as the operator" in page
+    assert "Your own DNS" in page
     assert "customer-one.example._report._dmarc.dmarc.reporthost.net" in page
     assert "customer-two.example._report._dmarc.dmarc.reporthost.net" in page
-    assert "2 record(s) still to publish" in page
+    assert "2 still to publish" in page

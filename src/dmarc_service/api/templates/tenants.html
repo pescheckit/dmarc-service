@@ -1,22 +1,25 @@
+{% import "_pagination.html" as pager %}
 {% extends "base.html" %}
-{% block title %}Tenants - dmarc-service{% endblock %}
+{% block title %}Tenants and domains - dmarc-service{% endblock %}
 {% block content %}
   <h1>Tenants &amp; domains</h1>
+  <p class="muted">A tenant owns domains. Each domain gets its own report address
+  and the DNS records that point reports at it.</p>
 
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
   {% for tenant in tenants %}
   <section class="section">
-    {% if tenant.system %}
-    <h2>{{ tenant.name }} <span class="muted">system - catches mail no active address claims</span></h2>
-    {% else %}
-    <h2>{{ tenant.name }} <span class="muted">{{ tenant.slug }}</span></h2>
-    {% endif %}
+    <h2>{{ tenant.name }}
+      <span class="pill">{{ tenant.slug }}</span>
+      <span class="muted">{{ tenant.domains | length }} domain{{ "" if tenant.domains | length == 1 else "s" }}</span>
+    </h2>
 
+    {% if tenant.domains %}
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Domain</th><th>Active report addresses</th><th class="nowrap">DNS</th><th class="actions"></th></tr>
+          <tr><th>Domain</th><th>Report address</th><th class="nowrap">Its DNS</th><th class="actions"></th></tr>
         </thead>
         <tbody>
           {% for domain in tenant.domains %}
@@ -24,25 +27,23 @@
             <td class="nowrap"><a href="/domains/{{ domain.name }}">{{ domain.name }}</a></td>
             <td>{% for a in domain.addresses %}<code class="rec">{{ a }}@{{ report_host }}</code>{% if not loop.last %} {% endif %}{% endfor %}</td>
             <td class="nowrap">
-              {% if domain.dns_ok == domain.dns_total %}<span class="ok">{{ domain.dns_ok }}/{{ domain.dns_total }} live</span>
-              {% else %}<span class="bad">{{ domain.dns_ok }}/{{ domain.dns_total }} live</span>{% endif %}
-              {% if domain.verification_missing %}
-              <span class="sub bad">verification record missing</span>
-              {% endif %}
+              {% if domain.dns_ok == domain.dns_total %}<span class="ok">all {{ domain.dns_total }} published</span>
+              {% else %}<span class="bad">{{ domain.dns_ok }} of {{ domain.dns_total }} published</span>{% endif %}
+              {% if domain.verification_missing %}<span class="sub bad">your verification record is missing</span>{% endif %}
             </td>
-            <td class="actions"><a href="/domains/{{ domain.name }}">DNS records -></a></td>
+            <td class="actions"><a href="/domains/{{ domain.name }}">Open</a></td>
           </tr>
-          {% else %}
-          <tr><td colspan="4" class="muted">No domains yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% else %}
+    <p class="muted">No domains yet.</p>
+    {% endif %}
 
-    {% if not tenant.system %}
     <div class="row-actions">
       <form class="inline" method="post" action="/tenants/{{ tenant.slug }}/domains">
-        <input type="text" name="name" placeholder="example.com" required>
+        <input type="text" name="name" placeholder="domain to monitor, e.g. example.com" size="32" required>
         <button type="submit">Add domain</button>
       </form>
       {% if not tenant.domains %}
@@ -52,25 +53,40 @@
       </form>
       {% endif %}
     </div>
-    {% endif %}
   </section>
   {% endfor %}
 
-  <section class="section" >
-    <h2>Records you publish as the operator</h2>
-    <p class="muted">Reports for a monitored domain are delivered to an address
-    at <code>{{ report_host }}</code>. Receivers only allow that when this zone
-    vouches for the domain (RFC 7489 external destination verification), so one
-    record per domain belongs in <strong>your</strong> DNS, not the tenant's.
-    Add a domain here and the record it needs appears below.</p>
+  {% if multi_tenant %}
+  <section class="section">
+    <h2>Add a tenant</h2>
+    <div class="row-actions" style="margin-top:0">
+      <form class="inline" method="post" action="/tenants">
+        <input type="text" name="slug" placeholder="short name, e.g. acme" pattern="[a-z0-9-]+" required>
+        <input type="text" name="name" placeholder="Display name">
+        <button type="submit">Create tenant</button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="section">
+    <h2>Your own DNS</h2>
+    <p class="muted">Every domain above needs one record in <code>{{ report_host }}</code>,
+    your zone, before its reports will be delivered. Tenants cannot publish these.
+    <details style="display:inline">
+      <summary class="muted">Why</summary>
+      <span class="muted">Reports for someone else's domain are being sent to an address
+      in yours, and receivers only permit that when your zone says so (RFC 7489
+      external destination verification).</span>
+    </details></p>
 
     {% if operator_missing %}
     <div class="banner banner-bad">
       <div>
-        <strong class="bad">{{ operator_missing | length }} record(s) still to publish</strong>
-        <div class="muted">Reports for
+        <strong class="bad">{{ operator_missing | length }} still to publish</strong>
+        <div class="muted">No reports will arrive for
           {% for r in operator_missing %}<code>{{ r.domain }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
-          will not be delivered until these exist.</div>
+          until they exist.</div>
       </div>
     </div>
     {% endif %}
@@ -78,9 +94,7 @@
     {% if operator_records %}
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr><th>For domain</th><th>Name</th><th>Type</th><th>Content</th><th>Live check</th></tr>
-        </thead>
+        <thead><tr><th>For</th><th>Name</th><th>Type</th><th>Content</th><th>Live check</th></tr></thead>
         <tbody>
           {% for r in operator_records %}
           <tr>
@@ -98,25 +112,16 @@
         </tbody>
       </table>
     </div>
-    <p class="muted">Enter the name without the trailing
-    <code>{{ report_host.split(".", 1)[1] if "." in report_host else report_host }}</code>
-    if your DNS panel appends the zone itself.</p>
     {% else %}
-    <p class="muted">Nothing to publish: every monitored domain shares an
-    organizational domain with {{ report_host }}.</p>
+    <p class="muted">Nothing to publish: every domain shares an organizational
+    domain with {{ report_host }}.</p>
     {% endif %}
   </section>
 
-  {% if multi_tenant %}
-  <section class="section">
-    <h2>New tenant</h2>
-    <div class="row-actions" style="margin-top:0">
-      <form class="inline" method="post" action="/tenants">
-        <input type="text" name="slug" placeholder="slug (e.g. acme)" pattern="[a-z0-9-]+" required>
-        <input type="text" name="name" placeholder="Display name">
-        <button type="submit">Create tenant</button>
-      </form>
-    </div>
-  </section>
-  {% endif %}
+  <p class="muted" style="margin-top:var(--s6)">
+    {% if quarantined %}<span class="pill bad">{{ quarantined }} quarantined</span>{% endif %}
+    Mail arriving for an address no domain claims is kept in an unrouted
+    quarantine rather than bounced, because a rejected report is lost for good.
+    {% if not quarantined %}Nothing is quarantined.{% endif %}
+  </p>
 {% endblock %}
