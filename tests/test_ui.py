@@ -417,3 +417,22 @@ def test_reports_are_paginated_at_100(client, aggregate_xml):
     # filters survive paging
     assert "domain=example.com" in client.get("/reports?domain=example.com").text or True
     assert client.get("/reports?page=99").status_code == 200  # clamped, no error
+
+
+def test_operator_record_is_shown_as_status_not_an_instruction(client, monkeypatch):
+    """The verification record lives in the operator's zone, so it must not
+    look like something the tenant should paste into their own DNS."""
+    from dmarc_service.control_plane import service as cp
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "example.com"})
+    monkeypatch.setattr(cp, "_resolve_txt", lambda name: [])
+    cp.clear_dns_cache()
+
+    page = client.get("/domains/example.com").text
+    assert "Publish these in the example.com zone" in page
+    assert "Handled by dmarc.reporthost.net" in page
+    assert "nothing to do in your own DNS" in page
+    # and it is called out when absent, since reports depend on it
+    assert "Verification is missing" in page

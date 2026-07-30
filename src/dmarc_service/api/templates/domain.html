@@ -55,29 +55,23 @@
     </form>
   </div>
 
+  {% set tenant_records = dns | selectattr("published_by", "equalto", "tenant") | list %}
+  {% set operator_records = dns | selectattr("published_by", "equalto", "operator") | list %}
+
   <section class="section">
-    <h2>DNS records to publish</h2>
-    <p class="muted">Copy these exactly, into the zone named in the first column.
-    Most DNS panels append the zone automatically, so enter only the part of the
-    name that comes before it. The verification record belongs to the service
-    operator's zone ({{ report_host }}), not to {{ domain.name }}: it is what
-    lets reports for your domain be delivered to an address in another one.</p>
+    <h2>Publish these in the {{ domain.name }} zone</h2>
+    <p class="muted">Copy the content exactly. Most DNS panels append the zone
+    themselves, so enter the name without the trailing <code>{{ domain.name }}</code>.</p>
 
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Add to zone</th><th>Name</th><th>Type</th><th>Content</th><th>Live check</th></tr>
+          <tr><th>Name</th><th>Type</th><th>Content</th><th>Live check</th></tr>
         </thead>
         <tbody>
-          {% for r in dns %}
+          {% for r in tenant_records %}
           <tr>
-            <td class="nowrap">
-              <code class="rec">{{ r.zone }}</code>
-              <span class="sub">{{ "your zone" if r.published_by == "tenant" else "the service operator's zone" }}</span>
-            </td>
-            <td class="nowrap"><code class="rec">{{ r.name }}</code>
-              {% if r.published_by == "operator" %}<span class="sub">not in {{ domain.name }}</span>{% endif %}
-            </td>
+            <td class="nowrap"><code class="rec">{{ r.name }}</code></td>
             <td>{{ r.type }}</td>
             <td class="wrap"><code class="rec">{{ r.content }}</code></td>
             <td class="nowrap">
@@ -98,6 +92,31 @@
       </table>
     </div>
   </section>
+
+  {% if operator_records %}
+  <section class="section">
+    <h2>Handled by {{ report_host }}</h2>
+    <p class="muted">Reports for {{ domain.name }} are delivered to an address in
+    another domain, which receivers only allow when that domain vouches for it
+    (RFC 7489). Publishing this is the job of whoever runs this service, in the
+    <code>{{ operator_records[0].zone }}</code> zone: nothing to do in your own DNS.</p>
+
+    {% for r in operator_records %}
+    <div class="banner {{ 'banner-ok' if r.status == 'ok' else 'banner-bad' }}">
+      <div>
+        {% if r.status == "ok" %}
+        <strong class="ok">Verification is in place</strong>
+        {% else %}
+        <strong class="bad">Verification is missing, so reports will not arrive</strong>
+        <div class="muted">Ask the operator of {{ report_host }} to publish
+        <code class="rec">{{ r.name }}</code> TXT <code class="rec">{{ r.content }}</code>
+        in the <code>{{ r.zone }}</code> zone.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   <section class="section">
     <h2>Report addresses</h2>
