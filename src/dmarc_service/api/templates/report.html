@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Report {{ report.org_name }} — dmarc-service{% endblock %}
+{% block title %}Report {{ report.org_name }} - dmarc-service{% endblock %}
 {% block content %}
   <h1>{{ report.policy_domain }} <span class="sub">reported by {{ report.org_name }}</span></h1>
   <p class="muted">
-    {{ report.date_begin.strftime("%Y-%m-%d %H:%M") }} → {{ report.date_end.strftime("%Y-%m-%d %H:%M") }}
-    · policy <code>p={{ report.policy_p }}</code>
-    · <span class="ok">{{ report.pass_count }} passed</span>
+    {{ report.date_begin.strftime("%Y-%m-%d %H:%M") }} -> {{ report.date_end.strftime("%Y-%m-%d %H:%M") }}
+    | policy <code>p={{ report.policy_p }}</code>
+    | <span class="ok">{{ report.pass_count }} passed</span>
     / <span class="bad {{ 'zero' if not report.fail_count }}">{{ report.fail_count }} failed</span>
   </p>
 
@@ -33,8 +33,8 @@
           <td>{{ r.spf }}</td>
           <td class="nowrap">{{ r.header_from }}</td>
           <td>
-            {{ r.sender_hint or "—" }}
-            <span class="sub">DKIM {{ r.auth_dkim }} · SPF {{ r.auth_spf }}</span>
+            {{ r.sender_hint or "-" }}
+            <span class="sub">DKIM {{ r.auth_dkim }} | SPF {{ r.auth_spf }}</span>
           </td>
         </tr>
         {% endfor %}

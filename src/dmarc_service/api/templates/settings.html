@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Settings — dmarc-service{% endblock %}
+{% block title %}Settings - dmarc-service{% endblock %}
 {% block content %}
   <h1>Settings</h1>
 
   <section class="section" style="margin-top:0">
     <h2>Your API tokens</h2>
-    <p class="muted">Use as <code>Authorization: Bearer &lt;token&gt;</code> on <code>/api/*</code> —
-    see the <a href="/docs" target="_blank" rel="noopener">interactive API documentation ↗</a>.
+    <p class="muted">Use as <code>Authorization: Bearer &lt;token&gt;</code> on <code>/api/*</code> -
+    see the <a href="/docs" target="_blank" rel="noopener">interactive API documentation </a>.
     Tokens are shown once and stored hashed.</p>
 
     {% if new_token %}
     <div class="banner banner-ok">
       <div>
-        <strong>New token — copy it now, it will not be shown again</strong>
+        <strong>New token - copy it now, it will not be shown again</strong>
         <div class="muted"><code class="rec">{{ new_token }}</code></div>
       </div>
     </div>
@@ -25,7 +25,7 @@
           {% for t in tokens %}
           <tr>
             <td>{{ t.name }}</td>
-            <td><code class="rec">{{ t.prefix }}…</code></td>
+            <td><code class="rec">{{ t.prefix }}...</code></td>
             <td class="nowrap">{{ t.created_at.strftime("%Y-%m-%d") }}</td>
             <td class="actions">
               <form class="inline" method="post" action="/settings/tokens/{{ t.id }}/revoke">
@@ -50,7 +50,7 @@
   {% if user.is_admin %}
   <section class="section">
     <h2>Single sign-on (OIDC)</h2>
-    <p class="muted">Works with Azure AD / Entra, Google Workspace, Keycloak, Okta, … —
+    <p class="muted">Works with Azure AD / Entra, Google Workspace, Keycloak, Okta, ... -
     set the redirect URI at your identity provider to <code class="rec">{{ callback_url }}</code>.
     Users signing in through SSO are created automatically as regular users.</p>
 
@@ -58,7 +58,7 @@
     <div class="banner banner-ok">
       <div>
         <strong>{{ sso.name }} is enabled</strong>
-        <div class="muted">issuer <code class="rec">{{ sso.issuer }}</code> · client <code>{{ sso.client_id }}</code></div>
+        <div class="muted">issuer <code class="rec">{{ sso.issuer }}</code> | client <code>{{ sso.client_id }}</code></div>
       </div>
       <form class="inline" method="post" action="/settings/sso/remove">
         <button class="danger">Remove</button>

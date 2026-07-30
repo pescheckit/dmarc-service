@@ -149,7 +149,7 @@ def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
         ),
     ]
 
-    # RFC 7489 §7.1: when the report address lives outside the monitored
+    # RFC 7489 section 7.1: when the report address lives outside the monitored
     # domain's organizational domain, the report host must publish a
     # verification record. Receiver implementations differ on org-vs-exact
     # comparison, so we always emit it when the org domains differ.
@@ -261,7 +261,7 @@ def check_dns_records(records: list[DnsRecord]) -> list[dict]:
     """Verify each expected record against live DNS.
 
     Status per record: ok (published), missing (nothing there), mismatch
-    (TXT exists but doesn't contain ours — e.g. stale record), unknown
+    (TXT exists but doesn't contain ours - e.g. stale record), unknown
     (lookup failed).
     """
     results = []

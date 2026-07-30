@@ -340,7 +340,7 @@ def report_page(request: Request, report_id: int):
         records = []
         for r in sorted(report.records, key=lambda r: -r.count):
             ok = r.dkim_result == "pass" or r.spf_result == "pass"
-            # Who actually sent it: the domain that authenticated, if any —
+            # Who actually sent it: the domain that authenticated, if any -
             # this is what separates "our misconfigured tool" from spoofing.
             sender_hint = r.auth_dkim_domain or r.auth_spf_domain or r.envelope_from
             records.append(

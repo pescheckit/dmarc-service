@@ -7,7 +7,7 @@
   <style>
     :root {
       color-scheme: light dark;
-      /* spacing scale — every gap/padding below comes from this */
+      /* spacing scale - every gap/padding below comes from this */
       --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
       --surface: #fcfcfb; --card: #ffffff; --border: #00000018; --hover: #00000008;
       --ink: #1c1c1a; --ink-2: #1c1c1aa8;
@@ -75,7 +75,7 @@
     /* --- controls --- */
     form.inline { display: inline-block; }
     .row-actions { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s3); }
-    input[type=text], input[type=password], input[type=email] {
+    input[type=text], input[type=password], input[type=email], input[type=file] {
       padding: var(--s2) var(--s3); border: 1px solid var(--border); border-radius: 7px;
       background: var(--card); color: inherit; font-size: .95rem; }
     input:focus-visible, button:focus-visible, a:focus-visible {
@@ -144,11 +144,12 @@
     <span class="brand">dmarc-service</span>
     <a href="/" class="{{ 'active' if request.url.path == '/' }}">Reports</a>
     <a href="/graphs" class="{{ 'active' if request.url.path.startswith('/graphs') }}">Graphs</a>
+    <a href="/upload" class="{{ 'active' if request.url.path.startswith('/upload') }}">Upload</a>
     <a href="/tenants" class="{{ 'active' if request.url.path.startswith('/tenants') }}">Tenants &amp; domains</a>
-    <a href="/docs" target="_blank" rel="noopener">API ↗</a>
+    <a href="/docs" target="_blank" rel="noopener">API </a>
     <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}">Settings</a>
     <span class="spacer"></span>
-    <span class="who">{{ report_host }} · {{ user.email }}</span>
+    <span class="who">{{ report_host }} | {{ user.email }}</span>
     <form class="inline" method="post" action="/logout"><button>Log out</button></form>
   </nav>
   <main>

@@ -62,7 +62,7 @@ def test_personal_api_token_roundtrip(client):
     response = client.get("/api/reports", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
 
-    # revoke → token dies
+    # revoke -> token dies
     token_id = page.split('action="/settings/tokens/')[1].split("/revoke")[0]
     client.post(f"/settings/tokens/{token_id}/revoke")
     response = client.get("/api/reports", headers={"Authorization": f"Bearer {token}"})
@@ -97,7 +97,7 @@ def test_report_detail_and_docs(client, aggregate_xml):
         headers={"Authorization": "Bearer test-ingest-token", "X-Rcpt-To": "x@dmarc.reporthost.net"},
     )
     dashboard = client.get("/").text
-    assert "details →" in dashboard
+    assert "details ->" in dashboard
 
     detail = client.get("/reports/1")
     assert detail.status_code == 200
@@ -131,8 +131,8 @@ def test_dns_check_and_deletion(client, monkeypatch):
     control_plane.clear_dns_cache()  # drop lookups cached before the patch
 
     page = client.get("/domains/example.com").text
-    assert "✓ published" in page
-    assert "✗ missing" in page
+    assert " published" in page
+    assert " missing" in page
 
     tenants = client.get("/tenants").text
     assert "2/3 live" in tenants  # _dmarc ok + EDV ok, _smtp._tls missing
@@ -174,5 +174,49 @@ def test_graphs_and_reports_pages(client, aggregate_xml):
 
     day = datetime.now(UTC).date().isoformat()
     listing = client.get(f"/reports?day={day}").text
-    assert "example.com" in listing and "details →" in listing
+    assert "example.com" in listing and "details ->" in listing
     assert "No reports match" in client.get("/reports?day=1999-01-01").text
+
+
+def test_upload_zip_and_gz(client, aggregate_xml, tlsrpt_json):
+    import gzip as gz
+    import io
+    import zipfile
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "example.com"})
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("google.com!example.com!1.xml", aggregate_xml)
+    page = client.post(
+        "/upload", files=[("files", ("reports.zip", buf.getvalue(), "application/zip"))],
+        follow_redirects=True,
+    ).text
+    assert "Imported 1 aggregate" in page
+
+    # the imported report is attributed to the domain and visible everywhere
+    assert "example.com" in client.get("/").text
+    assert len(client.get("/domains/example.com").text.split("details ->")) > 1
+
+    # gz TLS-RPT upload
+    page = client.post(
+        "/upload", files=[("files", ("t.json.gz", gz.compress(tlsrpt_json), "application/gzip"))],
+        follow_redirects=True,
+    ).text
+    assert "1 TLS-RPT report" in page
+
+    # duplicate import is skipped, not double-counted
+    page = client.post(
+        "/upload", files=[("files", ("reports.zip", buf.getvalue(), "application/zip"))],
+        follow_redirects=True,
+    ).text
+    assert "skipped" in page
+
+    # junk file reports an error instead of exploding
+    page = client.post(
+        "/upload", files=[("files", ("notes.txt", b"just some text", "text/plain"))],
+        follow_redirects=True,
+    ).text
+    assert "no DMARC or TLS-RPT documents" in page

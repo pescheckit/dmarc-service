@@ -2,7 +2,7 @@
 
 Routing key is the recipient local part. A message addressed to an active
 report address lands in that address's tenant/domain; anything else is kept
-in the "unrouted" quarantine tenant rather than bounced or dropped — a typo'd
+in the "unrouted" quarantine tenant rather than bounced or dropped - a typo'd
 DNS record or a mid-rotation address should never silently lose data.
 """
 
@@ -228,6 +228,7 @@ def process_upload(session: Session, filename: str, content: bytes) -> dict:
     session.flush()
 
     stored = {"aggregate": 0, "tlsrpt": 0, "skipped": 0}
+    unreadable = 0
     for document in documents:
         kind = parsers.classify(document)
         if kind == "aggregate":
@@ -255,7 +256,7 @@ def process_upload(session: Session, filename: str, content: bytes) -> dict:
             else:
                 stored["skipped"] += 1
         else:
-            stored["skipped"] += 1
+            unreadable += 1
 
     if not stored["aggregate"] and not stored["tlsrpt"] and not stored["skipped"]:
         raise ValueError(f"no DMARC or TLS-RPT documents found in {filename}")
@@ -269,7 +270,7 @@ def process_tlsrpt_http(session: Session, document: bytes) -> bool:
 
     The endpoint is unauthenticated per RFC 8460, so anyone can POST here.
     Legit senders only do so because our own _smtp._tls record for one of our
-    registered domains pointed them at this URL — therefore reports about
+    registered domains pointed them at this URL - therefore reports about
     unregistered domains are rejected outright to limit fake-report injection.
     """
     parsed = parsers.parse_tlsrpt_json(document)

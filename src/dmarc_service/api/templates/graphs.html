@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Graphs — dmarc-service{% endblock %}
+{% block title %}Graphs - dmarc-service{% endblock %}
 {% block content %}
   <h1>Graphs</h1>
 
@@ -20,7 +20,7 @@
     <div class="card"><div class="stat">{{ totals.total }}</div><div class="muted">messages reported</div></div>
     <div class="card"><div class="stat ok">{{ totals.pass }}</div><div class="muted">passed DMARC</div></div>
     <div class="card"><div class="stat {{ 'bad' if totals.fail else 'zero' }}">{{ totals.fail }}</div><div class="muted">failed DMARC</div></div>
-    <div class="card"><div class="stat">{{ totals.rate ~ "%" if totals.rate is not none else "—" }}</div><div class="muted">pass rate</div></div>
+    <div class="card"><div class="stat">{{ totals.rate ~ "%" if totals.rate is not none else "-" }}</div><div class="muted">pass rate</div></div>
   </div>
 
   <div class="card chart-card">
@@ -46,7 +46,7 @@
       <text x="{{ chart.left - 6 }}" y="{{ chart.mid_y + 4 }}" class="tick" text-anchor="end">{{ chart.mid }}</text>
       {% for b in chart.bars %}
       <a href="{{ b.link }}">
-        <title>{{ b.day }} — {{ b.pass }} pass, {{ b.fail }} fail</title>
+        <title>{{ b.day }} - {{ b.pass }} pass, {{ b.fail }} fail</title>
         <rect x="{{ b.x }}" y="{{ chart.top }}" width="{{ b.w }}" height="{{ chart.baseline - chart.top }}" fill="transparent"/>
         {% if b.pass_h %}<rect x="{{ b.x }}" y="{{ b.pass_y }}" width="{{ b.w }}" height="{{ b.pass_h }}" rx="2" fill="#0ca30c"/>{% endif %}
         {% if b.fail_h %}
@@ -71,7 +71,7 @@
           <td class="nowrap">{{ d.day }}</td>
           <td class="num ok {{ 'zero' if not d.pass }}">{{ d.pass }}</td>
           <td class="num bad {{ 'zero' if not d.fail }}">{{ d.fail }}</td>
-          <td class="actions"><a href="/reports?day={{ d.day.isoformat() }}{{ '&domain=' ~ domain if domain }}">reports →</a></td>
+          <td class="actions"><a href="/reports?day={{ d.day.isoformat() }}{{ '&domain=' ~ domain if domain }}">reports -></a></td>
         </tr>
         {% else %}
         <tr><td colspan="4" class="muted">No data in this window yet.</td></tr>

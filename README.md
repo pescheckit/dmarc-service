@@ -5,7 +5,7 @@ Self-hosted, multi-tenant **DMARC / TLS-RPT report collector and viewer**.
 Point your domains' `_dmarc` and `_smtp._tls` records at an address this
 service controls, and it receives, parses, stores, and shows you the aggregate
 reports that Google, Microsoft, Yahoo and everyone else send about mail
-claiming to come from your domains — who is sending as you, what passes, what
+claiming to come from your domains - who is sending as you, what passes, what
 fails, and from where.
 
 Runs on a single VPS with Docker Compose, or on Kubernetes with the bundled
@@ -18,10 +18,10 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
   unauthenticated HTTPS `/tlsrpt` endpoint as required by RFC 8460.
 - Parses DMARC aggregate XML and TLS-RPT JSON, plain, gzipped or zipped.
 - Deliberate intake rules for report mail: accepts from anyone, no greylisting,
-  50 MB default ceiling, duplicate reports ignored — see *Intake rules* below.
+  50 MB default ceiling, duplicate reports ignored - see *Intake rules* below.
 - **Direct or forward mode**: store locally, or run the same image as a
   stateless edge that relays messages over authenticated HTTPS to your main
-  instance — for clouds that block inbound port 25 (DigitalOcean, for example).
+  instance - for clouds that block inbound port 25 (DigitalOcean, for example).
 - **Nothing silently lost**: mail for unknown or rotated-out addresses lands in
   an `unrouted` quarantine tenant instead of bouncing, and every message is
   kept verbatim.
@@ -30,25 +30,33 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 - Multi-tenant: tenants own domains; domains get unguessable, rotatable report
   addresses (bearer tokens, no `+` addressing). Single-tenant mode available.
 - Tells you the **exact DNS records to publish** per domain, including the
-  external-destination verification record (RFC 7489 §7.1) when the monitored
+  external-destination verification record (RFC 7489 section 7.1) when the monitored
   domain and the report host live in different organizational domains.
 - **Live DNS verification**: every record is checked against the domain's
-  *authoritative* nameservers — never a recursive resolver, whose cached
+  *authoritative* nameservers - never a recursive resolver, whose cached
   positive and negative answers make a "live" check lie for hours after an
   edit. Statuses: published, missing, different-record-found, malformed
   (present but receivers would ignore it), lookup-failed. Cached 15 minutes,
   with a re-check button rate-limited to once a minute.
 - **Address rotation**: mint a second address, publish it, then deactivate the
-  old one — both accept mail during the overlap, so no report is lost.
+  old one - both accept mail during the overlap, so no report is lost.
+
+**Manual import**
+- Upload page (and `POST /upload`) for importing report files by hand: `.zip`,
+  `.gz`, raw `.xml` / `.json`, or whole `.eml` messages, several at a time.
+  Useful for historical archives, reports that landed in a mailbox, or data
+  exported from another provider. Duplicates are detected, so re-importing the
+  same archive is safe, and imports are attributed by the policy domain inside
+  the file so they work for addresses that have since been rotated.
 
 **Viewing**
 - Dashboard with 30-day pass/fail/quarantine totals.
 - **Graphs**: daily stacked pass/fail bars, 30 or 90 days, filterable per
   domain. Click any day to drill into that day's reports, then into a single
-  report. Server-rendered SVG — no JS bundle — with a table fallback and
+  report. Server-rendered SVG - no JS bundle - with a table fallback and
   color-blind-safe encoding (position + texture, not color alone).
 - **Per-report detail**: every sending source with its IP, message count,
-  DKIM/SPF results, disposition, and — the useful part — the domain the mail
+  DKIM/SPF results, disposition, and - the useful part - the domain the mail
   actually **authenticated as**, which separates your own misconfigured tools
   from outright spoofing.
 
@@ -56,7 +64,7 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 - The first account created in the UI becomes the **admin**; no bootstrap
   passwords in environment variables.
 - The admin can configure **OIDC single sign-on** (Azure AD / Entra, Google
-  Workspace, Keycloak, Okta, …) in Settings; SSO users are auto-provisioned.
+  Workspace, Keycloak, Okta, ...) in Settings; SSO users are auto-provisioned.
 - Every user can mint **personal API tokens** (hashed at rest, shown once) for
   `Authorization: Bearer` on `/api/*`; a static `API_TOKEN` is also supported
   for automation.
@@ -65,16 +73,17 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 ## Architecture
 
 ```
-                    MX example.com            ┌──────────────────────────┐
-report senders  ──────────────────────────▶   │ smtp (port 25)           │
-(google.com, ...)                             │  mode: direct ──▶ DB     │
-                                              │  mode: forward ─▶ HTTPS ─┼──▶ /api/ingest
-                    https rua (TLS-RPT)       ├──────────────────────────┤
-senders/browsers ─────────────────────────▶   │ web (port 8000)          │
-                                              │  UI · API · /tlsrpt      │
-                                              └────────────┬─────────────┘
-                                                           ▼
-                                                   PostgreSQL / SQLite
+                     MX example.com          +--------------------------+
+  report senders  ------------------------>  | smtp (port 25)           |
+  (google.com, ...)                          |  mode: direct  -> DB     |
+                                             |  mode: forward -> HTTPS -+--> /api/ingest
+                     https rua (TLS-RPT)     +--------------------------+
+  senders/browsers ----------------------->  | web (port 8000)          |
+                                             |  UI | API | /tlsrpt      |
+                                             +------------+-------------+
+                                                          |
+                                                          v
+                                                  PostgreSQL / SQLite
 ```
 
 ## Quickstart (local)
@@ -84,29 +93,29 @@ docker compose up --build
 # UI on http://localhost:8000, SMTP on localhost:2525
 ```
 
-Open the UI, create the first (admin) account, add a tenant and a domain — the
+Open the UI, create the first (admin) account, add a tenant and a domain - the
 domain page then shows the DNS records to publish and verifies them live.
 
 ## Deployment
 
-**Single VPS** — [`deploy/vps`](deploy/vps): compose file with PostgreSQL, web,
+**Single VPS** - [`deploy/vps`](deploy/vps): compose file with PostgreSQL, web,
 SMTP receiver and Caddy for automatic HTTPS certificates. Copy the directory,
 fill in `.env`, `docker compose up -d`, point DNS at the host. Ports needed:
 25, 80, 443.
 
-**Kubernetes** — [`chart/dmarc-service`](chart/dmarc-service), built to adapt to
+**Kubernetes** - [`chart/dmarc-service`](chart/dmarc-service), built to adapt to
 what you *don't* have:
 
-| You don't have…            | Then…                                                                  |
+| You don't have...            | Then...                                                                  |
 |----------------------------|------------------------------------------------------------------------|
-| an ingress controller      | `web.ingress.enabled=false` (default) — expose the Service yourself     |
+| an ingress controller      | `web.ingress.enabled=false` (default) - expose the Service yourself     |
 | cert-manager               | leave `web.ingress.certManager.clusterIssuer` empty; bring TLS or none  |
 | LoadBalancer support       | `smtp.service.type=NodePort` or `ClusterIP`                             |
 | a cloud that allows port 25| `smtp.mode=forward` + a cheap external VPS running the same image       |
 | PostgreSQL                 | `database.url=sqlite:////data/dmarc.db` + `persistence.enabled=true`    |
 | a secrets operator         | inline values, or point at your own `existingSecret`                    |
 
-### Intake rules (deliberate — do not "harden" these)
+### Intake rules (deliberate - do not "harden" these)
 
 - **Accept mail from anyone.** Report mail authenticates as google.com,
   microsoft.com, etc. Filtering inbound reports by SPF/DMARC alignment against

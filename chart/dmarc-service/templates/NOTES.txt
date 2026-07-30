@@ -16,7 +16,7 @@ SMTP intake ({{ .Values.smtp.mode }} mode):
   kubectl -n {{ .Release.Namespace }} get svc {{ include "dmarc-service.fullname" . }}-smtp
   Point your MX at the EXTERNAL-IP above (DNS-only / unproxied A record!).
 {{- else }}
-  Service type {{ .Values.smtp.service.type }} — expose port 25 to the internet yourself.
+  Service type {{ .Values.smtp.service.type }} - expose port 25 to the internet yourself.
 {{- end }}
 {{- end }}
 

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ domain.name }} — dmarc-service{% endblock %}
+{% block title %}{{ domain.name }} - dmarc-service{% endblock %}
 {% block content %}
   <h1>{{ domain.name }}</h1>
 
   <div class="banner {{ 'banner-ok' if summary.all_ok else 'banner-bad' }}">
     <div>
       {% if summary.all_ok %}
-      <strong class="ok">✓ All {{ summary.total }} records are published correctly</strong>
+      <strong class="ok">All {{ summary.total }} records are published correctly</strong>
       <div class="muted">Reports for this domain arrive within ~24h of the first sender cycle.</div>
       {% else %}
       <strong class="bad">{{ summary.ok }} of {{ summary.total }} records published</strong>
@@ -17,7 +17,7 @@
       {% endif %}
       <div class="muted">
         {% if just_checked %}Just re-checked against the domain's authoritative nameservers.
-        {% elif checked_age is not none %}Checked {{ checked_age }}s ago — authoritative lookup, cached 15 min.
+        {% elif checked_age is not none %}Checked {{ checked_age }}s ago - authoritative lookup, cached 15 min.
         {% endif %}
       </div>
     </div>
@@ -48,12 +48,12 @@
             <td class="wrap"><code class="rec">{{ r.content }}</code></td>
             <td class="nowrap">{{ r.published_by }}</td>
             <td class="nowrap">
-              {% if r.status == "ok" %}<span class="ok">✓ published</span>
-              {% elif r.status == "missing" %}<span class="bad">✗ missing</span>
-              {% elif r.status == "mismatch" %}<span class="warn">≠ different record</span>
-                <span class="sub">live: {{ r.found | join(" · ") }}</span>
-              {% elif r.status == "malformed" %}<span class="warn">⚠ malformed</span>
-                <span class="sub">receivers ignore it · live: {{ r.found | join(" · ") }}</span>
+              {% if r.status == "ok" %}<span class="ok">published</span>
+              {% elif r.status == "missing" %}<span class="bad">missing</span>
+              {% elif r.status == "mismatch" %}<span class="warn">different record</span>
+                <span class="sub">live: {{ r.found | join(" | ") }}</span>
+              {% elif r.status == "malformed" %}<span class="warn">malformed</span>
+                <span class="sub">receivers ignore it | live: {{ r.found | join(" | ") }}</span>
               {% else %}<span class="muted">? lookup failed</span>
               {% endif %}
             </td>
@@ -108,10 +108,10 @@
           {% for r in reports %}
           <tr>
             <td>{{ r.org_name }}</td>
-            <td class="nowrap">{{ r.date_begin.strftime("%Y-%m-%d") }} → {{ r.date_end.strftime("%Y-%m-%d") }}</td>
+            <td class="nowrap">{{ r.date_begin.strftime("%Y-%m-%d") }} -> {{ r.date_end.strftime("%Y-%m-%d") }}</td>
             <td class="num ok {{ 'zero' if not r.pass_count }}">{{ r.pass_count }}</td>
             <td class="num bad {{ 'zero' if not r.fail_count }}">{{ r.fail_count }}</td>
-            <td class="actions"><a href="/reports/{{ r.id }}">details →</a></td>
+            <td class="actions"><a href="/reports/{{ r.id }}">details -></a></td>
           </tr>
           {% else %}
           <tr><td colspan="5" class="muted">Nothing yet.</td></tr>

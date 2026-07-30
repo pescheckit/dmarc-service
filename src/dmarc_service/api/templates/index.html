@@ -22,14 +22,14 @@
         <tr>
           <td class="nowrap"><a href="/domains/{{ r.policy_domain }}">{{ r.policy_domain }}</a></td>
           <td>{{ r.org_name }}</td>
-          <td class="nowrap">{{ r.date_begin.strftime("%Y-%m-%d") }} → {{ r.date_end.strftime("%Y-%m-%d") }}</td>
+          <td class="nowrap">{{ r.date_begin.strftime("%Y-%m-%d") }} -> {{ r.date_end.strftime("%Y-%m-%d") }}</td>
           <td>{{ r.policy_p }}</td>
           <td class="num ok {{ 'zero' if not r.pass_count }}">{{ r.pass_count }}</td>
           <td class="num bad {{ 'zero' if not r.fail_count }}">{{ r.fail_count }}</td>
-          <td class="actions"><a href="/reports/{{ r.id }}">details →</a></td>
+          <td class="actions"><a href="/reports/{{ r.id }}">details -></a></td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="muted">No reports yet. Add a domain under “Tenants &amp; domains”, publish its DNS records, and wait for the first sender cycle (~24h).</td></tr>
+        <tr><td colspan="7" class="muted">No reports yet. Add a domain under "Tenants &amp; domains", publish its DNS records, and wait for the first sender cycle (~24h).</td></tr>
         {% endfor %}
       </tbody>
     </table>

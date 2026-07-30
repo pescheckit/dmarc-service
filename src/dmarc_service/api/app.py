@@ -55,7 +55,7 @@ app.include_router(ui.router)
 
 def require_api_token(authorization: str = Header(default="")) -> None:
     """Accepts the static API_TOKEN (automation/back-compat) or any personal
-    token minted in the UI. The API is only open when neither exists —
+    token minted in the UI. The API is only open when neither exists -
     i.e. a fresh install that hasn't completed /setup yet."""
     from dmarc_service.auth import service as auth
 
@@ -87,7 +87,7 @@ def healthz():
     return {"status": "ok"}
 
 
-# --- TLS-RPT https rua endpoint (RFC 8460 §5.3: unauthenticated POST) ---
+# --- TLS-RPT https rua endpoint (RFC 8460 section 5.3: unauthenticated POST) ---
 
 
 @app.post("/tlsrpt", status_code=201)
