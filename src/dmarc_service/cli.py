@@ -12,6 +12,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("migrate", help="create/upgrade the database schema")
     sub.add_parser("enrich", help="resolve owners for source IPs seen in reports")
     sub.add_parser("backup", help="dump the database to S3-compatible storage")
+    sub.add_parser("reprocess", help="re-run stored messages that produced no report")
 
     # Break-glass: run these on the server when nobody can sign in, for
     # example after an SSO misconfiguration locked out the only admin.
@@ -56,6 +57,12 @@ def main(argv: list[str] | None = None) -> None:
 
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
         print(f"backed up to {run()}")
+    elif args.command == "reprocess":
+        from dmarc_service.db.session import session_scope
+        from dmarc_service.ingest.pipeline import reprocess
+
+        with session_scope() as db:
+            print(reprocess(db))
     elif args.command == "set-password":
         import getpass
 

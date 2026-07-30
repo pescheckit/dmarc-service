@@ -71,10 +71,15 @@ def process_message(
 
     message = message_from_bytes(content)
     try:
-        stored = _store_reports(session, message, raw, tenant_id, domain_id)
-        if stored == 0 and raw.status == "routed":
+        parsed, stored = _store_reports(session, message, raw, tenant_id, domain_id)
+        if parsed == 0 and raw.status == "routed":
             raw.status = "failed"
             raw.error = "no parsable report documents found"
+        elif stored == 0 and raw.status == "routed":
+            # Every document was one we already hold: a forwarded copy, or a
+            # sender retrying. Not a failure, and not worth storing twice.
+            raw.status = "duplicate"
+            raw.error = "already stored"
     except Exception as exc:
         logger.exception("failed to process message %s", raw.id)
         raw.status = "failed"
@@ -90,19 +95,24 @@ def _store_reports(
     raw: RawMessage,
     tenant_id: int | None,
     domain_id: int | None,
-) -> int:
-    stored = 0
+) -> tuple[int, int]:
+    """Returns (documents understood, documents newly stored)."""
+    parsed = stored = 0
     for document in parsers.extract_report_payloads(message):
         kind = parsers.classify(document)
-        if kind == "aggregate" and _store_aggregate(
-            session, parsers.parse_aggregate_xml(document), raw, tenant_id, domain_id
-        ):
-            stored += 1
-        elif kind == "tlsrpt" and _store_tlsrpt(
-            session, parsers.parse_tlsrpt_json(document), raw, tenant_id, domain_id
-        ):
-            stored += 1
-    return stored
+        if kind == "aggregate":
+            parsed += 1
+            if _store_aggregate(
+                session, parsers.parse_aggregate_xml(document), raw, tenant_id, domain_id
+            ):
+                stored += 1
+        elif kind == "tlsrpt":
+            parsed += 1
+            if _store_tlsrpt(
+                session, parsers.parse_tlsrpt_json(document), raw, tenant_id, domain_id
+            ):
+                stored += 1
+    return parsed, stored
 
 
 def _store_aggregate(
@@ -205,6 +215,56 @@ def _store_tlsrpt(
         )
     )
     return True
+
+
+def reprocess(session: Session, limit: int = 1000) -> dict:
+    """Re-run stored messages that never produced a report.
+
+    Useful after the parser learns a new format, or after a routing fix:
+    every message is kept verbatim, so nothing has to be re-fetched from the
+    senders (which is impossible anyway).
+    """
+    counts = {"examined": 0, "recovered": 0, "duplicate": 0, "still_failing": 0}
+    messages = session.scalars(
+        select(RawMessage)
+        .where(RawMessage.status.in_(["failed", "unrouted", "duplicate"]))
+        .order_by(RawMessage.id)
+        .limit(limit)
+    ).all()
+
+    for raw in messages:
+        counts["examined"] += 1
+        local_part = raw.rcpt_to.split("@", 1)[0].lower() if raw.rcpt_to else ""
+        address = resolve_address(session, local_part) if local_part else None
+        retired = (
+            resolve_retired_address(session, local_part)
+            if address is None and local_part
+            else None
+        )
+        known = address or retired
+        tenant_id = known.domain.tenant_id if known else None
+        domain_id = known.domain_id if known else None
+
+        try:
+            parsed, stored = _store_reports(
+                session, message_from_bytes(raw.content), raw, tenant_id, domain_id
+            )
+        except Exception as exc:  # noqa: BLE001 - keep going through the batch
+            raw.status, raw.error = "failed", str(exc)[:2000]
+            counts["still_failing"] += 1
+            continue
+
+        if stored:
+            raw.status, raw.error = ("routed" if address else "retired"), ""
+            counts["recovered"] += 1
+        elif parsed:
+            raw.status, raw.error = "duplicate", "already stored"
+            counts["duplicate"] += 1
+        else:
+            counts["still_failing"] += 1
+
+    session.flush()
+    return counts
 
 
 def process_upload(session: Session, filename: str, content: bytes) -> dict:

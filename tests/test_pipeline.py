@@ -96,3 +96,37 @@ def test_mail_to_a_retired_address_is_still_attributed(db, aggregate_xml):
     assert "deactivated address" in raw.error
     report = db.scalar(select(AggregateReport))
     assert report.domain_id == domain.id  # attributed, not quarantined
+
+
+def test_duplicates_are_labelled_not_failed(db, aggregate_xml):
+    """A forwarded copy of a report we hold is not a failure."""
+    tenant = control_plane.create_tenant(db, "acme", "Acme")
+    domain = control_plane.add_domain(db, tenant, "example.com")
+    rcpt = f"{control_plane.active_addresses(db, domain)[0].local_part}@dmarc.reporthost.net"
+    content = build_report_email(aggregate_xml, rcpt)
+
+    assert process_message(db, content, rcpt_to=rcpt).status == "routed"
+    second = process_message(db, content, rcpt_to=rcpt)
+    assert second.status == "duplicate"
+    assert len(db.scalars(select(AggregateReport)).all()) == 1
+
+
+def test_reprocess_recovers_messages_after_a_parser_fix(db, aggregate_xml, monkeypatch):
+    from dmarc_service.ingest import parsers, pipeline
+
+    tenant = control_plane.create_tenant(db, "acme", "Acme")
+    domain = control_plane.add_domain(db, tenant, "example.com")
+    rcpt = f"{control_plane.active_addresses(db, domain)[0].local_part}@dmarc.reporthost.net"
+
+    # a parser that cannot read the format yet
+    monkeypatch.setattr(parsers, "classify", lambda document: "unknown")
+    raw = process_message(db, build_report_email(aggregate_xml, rcpt), rcpt_to=rcpt)
+    assert raw.status == "failed"
+    assert db.scalar(select(AggregateReport)) is None
+
+    # the parser learns the format, and the kept message is re-run
+    monkeypatch.undo()
+    counts = pipeline.reprocess(db)
+    assert counts["recovered"] == 1
+    report = db.scalar(select(AggregateReport))
+    assert report is not None and report.domain_id == domain.id
