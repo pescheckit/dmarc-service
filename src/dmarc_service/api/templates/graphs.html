@@ -60,22 +60,24 @@
     </div>
   </div>
 
-  <details style="margin-top:1rem">
+  <details>
     <summary class="muted">Daily totals as a table</summary>
+    <div class="table-wrap">
     <table>
-      <thead><tr><th>Day</th><th>Pass</th><th>Fail</th><th></th></tr></thead>
+      <thead><tr><th class="nowrap">Day</th><th class="num">Pass</th><th class="num">Fail</th><th class="actions"></th></tr></thead>
       <tbody>
         {% for d in series | reverse %}
         <tr>
-          <td>{{ d.day }}</td>
-          <td class="ok {{ 'zero' if not d.pass }}">{{ d.pass }}</td>
-          <td class="bad {{ 'zero' if not d.fail }}">{{ d.fail }}</td>
-          <td><a href="/reports?day={{ d.day.isoformat() }}{{ '&domain=' ~ domain if domain }}">reports →</a></td>
+          <td class="nowrap">{{ d.day }}</td>
+          <td class="num ok {{ 'zero' if not d.pass }}">{{ d.pass }}</td>
+          <td class="num bad {{ 'zero' if not d.fail }}">{{ d.fail }}</td>
+          <td class="actions"><a href="/reports?day={{ d.day.isoformat() }}{{ '&domain=' ~ domain if domain }}">reports →</a></td>
         </tr>
         {% else %}
         <tr><td colspan="4" class="muted">No data in this window yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </details>
 {% endblock %}

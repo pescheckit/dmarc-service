@@ -6,49 +6,63 @@
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
   {% for tenant in tenants %}
-  {% if tenant.system %}
-  <h2>{{ tenant.name }} <span class="muted">(system — catches mail no active address claims)</span></h2>
-  {% else %}
-  <h2>{{ tenant.name }} <span class="muted">({{ tenant.slug }})</span></h2>
-  {% endif %}
-  <table>
-    <thead><tr><th>Domain</th><th>Active report addresses</th><th>DNS</th><th></th></tr></thead>
-    <tbody>
-      {% for domain in tenant.domains %}
-      <tr>
-        <td><a href="/domains/{{ domain.name }}">{{ domain.name }}</a></td>
-        <td>{% for a in domain.addresses %}<code>{{ a }}@{{ report_host }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
-        <td>
-          {% if domain.dns_ok == domain.dns_total %}<span class="ok">✓ {{ domain.dns_ok }}/{{ domain.dns_total }}</span>
-          {% else %}<span class="bad">{{ domain.dns_ok }}/{{ domain.dns_total }} live</span>{% endif %}
-        </td>
-        <td><a href="/domains/{{ domain.name }}">DNS records →</a></td>
-      </tr>
-      {% else %}
-      <tr><td colspan="4" class="muted">No domains yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% if not tenant.system %}
-  <form method="post" action="/tenants/{{ tenant.slug }}/domains" style="margin-top:.6rem" class="inline">
-    <input type="text" name="name" placeholder="example.com" required>
-    <button type="submit">Add domain</button>
-  </form>
-  {% endif %}
-  {% if not tenant.domains and not tenant.system %}
-  <form method="post" action="/tenants/{{ tenant.slug }}/delete" class="inline"
-        onsubmit="return confirm('Delete tenant {{ tenant.slug }}?')">
-    <button>Delete tenant</button>
-  </form>
-  {% endif %}
+  <section class="section">
+    {% if tenant.system %}
+    <h2>{{ tenant.name }} <span class="muted">system — catches mail no active address claims</span></h2>
+    {% else %}
+    <h2>{{ tenant.name }} <span class="muted">{{ tenant.slug }}</span></h2>
+    {% endif %}
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Domain</th><th>Active report addresses</th><th class="nowrap">DNS</th><th class="actions"></th></tr>
+        </thead>
+        <tbody>
+          {% for domain in tenant.domains %}
+          <tr>
+            <td class="nowrap"><a href="/domains/{{ domain.name }}">{{ domain.name }}</a></td>
+            <td>{% for a in domain.addresses %}<code class="rec">{{ a }}@{{ report_host }}</code>{% if not loop.last %} {% endif %}{% endfor %}</td>
+            <td class="nowrap">
+              {% if domain.dns_ok == domain.dns_total %}<span class="ok">✓ {{ domain.dns_ok }}/{{ domain.dns_total }} live</span>
+              {% else %}<span class="bad">{{ domain.dns_ok }}/{{ domain.dns_total }} live</span>{% endif %}
+            </td>
+            <td class="actions"><a href="/domains/{{ domain.name }}">DNS records →</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No domains yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if not tenant.system %}
+    <div class="row-actions">
+      <form class="inline" method="post" action="/tenants/{{ tenant.slug }}/domains">
+        <input type="text" name="name" placeholder="example.com" required>
+        <button type="submit">Add domain</button>
+      </form>
+      {% if not tenant.domains %}
+      <form class="inline" method="post" action="/tenants/{{ tenant.slug }}/delete"
+            onsubmit="return confirm('Delete tenant {{ tenant.slug }}?')">
+        <button class="danger">Delete tenant</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </section>
   {% endfor %}
 
   {% if multi_tenant %}
-  <h2>New tenant</h2>
-  <form method="post" action="/tenants">
-    <input type="text" name="slug" placeholder="slug (e.g. acme)" pattern="[a-z0-9-]+" required>
-    <input type="text" name="name" placeholder="Display name">
-    <button type="submit">Create tenant</button>
-  </form>
+  <section class="section">
+    <h2>New tenant</h2>
+    <div class="row-actions" style="margin-top:0">
+      <form class="inline" method="post" action="/tenants">
+        <input type="text" name="slug" placeholder="slug (e.g. acme)" pattern="[a-z0-9-]+" required>
+        <input type="text" name="name" placeholder="Display name">
+        <button type="submit">Create tenant</button>
+      </form>
+    </div>
+  </section>
   {% endif %}
 {% endblock %}

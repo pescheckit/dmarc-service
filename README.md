@@ -2,33 +2,65 @@
 
 Self-hosted, multi-tenant **DMARC / TLS-RPT report collector and viewer**.
 
-Point your domains' `_dmarc` and `_smtp._tls` DNS records at an address this
-service controls, and it receives, parses, stores, and displays the aggregate
-reports that Google, Microsoft, Yahoo, and everyone else send about mail
-claiming to come from your domains.
+Point your domains' `_dmarc` and `_smtp._tls` records at an address this
+service controls, and it receives, parses, stores, and shows you the aggregate
+reports that Google, Microsoft, Yahoo and everyone else send about mail
+claiming to come from your domains — who is sending as you, what passes, what
+fails, and from where.
 
-## Why this exists
+Runs on a single VPS with Docker Compose, or on Kubernetes with the bundled
+Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 
-Hosted DMARC dashboards are convenient until you have many domains, many
-clients, or data-locality requirements. dmarc-service is a small,
-self-contained alternative:
+## Features
 
-- **One image, three roles** — `web` (API + UI + TLS-RPT HTTPS endpoint),
-  `smtp` (report intake MTA), `migrate` (schema).
-- **Multi-tenant** — run it for yourself or for all of your clients. Each
-  tenant gets domains; each domain gets unguessable, rotatable report
-  addresses minted by the control plane.
-- **DNS told to you, not guessed by you** — for every domain the API returns
-  the exact records to publish, including the external-destination
-  verification records (RFC 7489 §7.1) when the monitored domain and report
-  host live in different organizational domains.
-- **Nothing silently lost** — unknown recipients, typo'd records, and
-  mid-rotation stragglers land in an `unrouted` quarantine tenant instead of
-  being bounced.
-- **Self-contained auth** — the first account created in the web UI becomes
-  the admin; the admin can configure OIDC SSO (Azure AD / Entra, Google,
-  Keycloak, Okta, …) through which everyone else signs in, and every user can
-  mint personal API tokens (hashed at rest, shown once) for `/api/*`.
+**Report intake**
+- SMTP receiver (port 25) for aggregate and TLS-RPT report mail, plus an
+  unauthenticated HTTPS `/tlsrpt` endpoint as required by RFC 8460.
+- Parses DMARC aggregate XML and TLS-RPT JSON, plain, gzipped or zipped.
+- Deliberate intake rules for report mail: accepts from anyone, no greylisting,
+  50 MB default ceiling, duplicate reports ignored — see *Intake rules* below.
+- **Direct or forward mode**: store locally, or run the same image as a
+  stateless edge that relays messages over authenticated HTTPS to your main
+  instance — for clouds that block inbound port 25 (DigitalOcean, for example).
+- **Nothing silently lost**: mail for unknown or rotated-out addresses lands in
+  an `unrouted` quarantine tenant instead of bouncing, and every message is
+  kept verbatim.
+
+**Control plane**
+- Multi-tenant: tenants own domains; domains get unguessable, rotatable report
+  addresses (bearer tokens, no `+` addressing). Single-tenant mode available.
+- Tells you the **exact DNS records to publish** per domain, including the
+  external-destination verification record (RFC 7489 §7.1) when the monitored
+  domain and the report host live in different organizational domains.
+- **Live DNS verification**: every record is checked against the domain's
+  *authoritative* nameservers — never a recursive resolver, whose cached
+  positive and negative answers make a "live" check lie for hours after an
+  edit. Statuses: published, missing, different-record-found, malformed
+  (present but receivers would ignore it), lookup-failed. Cached 15 minutes,
+  with a re-check button rate-limited to once a minute.
+- **Address rotation**: mint a second address, publish it, then deactivate the
+  old one — both accept mail during the overlap, so no report is lost.
+
+**Viewing**
+- Dashboard with 30-day pass/fail/quarantine totals.
+- **Graphs**: daily stacked pass/fail bars, 30 or 90 days, filterable per
+  domain. Click any day to drill into that day's reports, then into a single
+  report. Server-rendered SVG — no JS bundle — with a table fallback and
+  color-blind-safe encoding (position + texture, not color alone).
+- **Per-report detail**: every sending source with its IP, message count,
+  DKIM/SPF results, disposition, and — the useful part — the domain the mail
+  actually **authenticated as**, which separates your own misconfigured tools
+  from outright spoofing.
+
+**Accounts & API**
+- The first account created in the UI becomes the **admin**; no bootstrap
+  passwords in environment variables.
+- The admin can configure **OIDC single sign-on** (Azure AD / Entra, Google
+  Workspace, Keycloak, Okta, …) in Settings; SSO users are auto-provisioned.
+- Every user can mint **personal API tokens** (hashed at rest, shown once) for
+  `Authorization: Bearer` on `/api/*`; a static `API_TOKEN` is also supported
+  for automation.
+- Full JSON API with interactive docs at `/docs`.
 
 ## Architecture
 
@@ -42,94 +74,95 @@ senders/browsers ─────────────────────
                                               │  UI · API · /tlsrpt      │
                                               └────────────┬─────────────┘
                                                            ▼
-                                                       PostgreSQL
+                                                   PostgreSQL / SQLite
 ```
-
-The **forward mode** matters when your main cluster's cloud blocks inbound
-port 25 (DigitalOcean, for example): run the same image as a tiny stateless
-"edge" on any VPS that allows SMTP, and it relays every message over
-authenticated HTTPS to your main deployment. No database or secrets on the
-edge beyond one token.
 
 ## Quickstart (local)
 
 ```sh
 docker compose up --build
 # UI on http://localhost:8000, SMTP on localhost:2525
-
-# create a tenant and a domain; the response contains the DNS records to publish
-curl -X POST localhost:8000/api/tenants -H 'content-type: application/json' \
-     -d '{"slug": "acme", "name": "Acme Inc"}'
-curl -X POST localhost:8000/api/tenants/acme/domains -H 'content-type: application/json' \
-     -d '{"name": "example.com"}'
 ```
+
+Open the UI, create the first (admin) account, add a tenant and a domain — the
+domain page then shows the DNS records to publish and verifies them live.
 
 ## Deployment
 
-Two equally supported paths:
+**Single VPS** — [`deploy/vps`](deploy/vps): compose file with PostgreSQL, web,
+SMTP receiver and Caddy for automatic HTTPS certificates. Copy the directory,
+fill in `.env`, `docker compose up -d`, point DNS at the host. Ports needed:
+25, 80, 443.
 
-**Single VPS** (simplest — one host that allows inbound port 25):
-[`deploy/vps`](deploy/vps) is a ready-made compose file with PostgreSQL, the
-web app, the SMTP receiver in direct mode, and Caddy terminating HTTPS with
-automatic certificates. Copy the directory, fill in `.env`, `docker compose
-up -d`, point your DNS at the host.
+**Kubernetes** — [`chart/dmarc-service`](chart/dmarc-service), built to adapt to
+what you *don't* have:
 
-**Kubernetes**: a Helm chart lives in
-[`chart/dmarc-service`](chart/dmarc-service). It is built to adapt to what
-you *don't* have:
+| You don't have…            | Then…                                                                  |
+|----------------------------|------------------------------------------------------------------------|
+| an ingress controller      | `web.ingress.enabled=false` (default) — expose the Service yourself     |
+| cert-manager               | leave `web.ingress.certManager.clusterIssuer` empty; bring TLS or none  |
+| LoadBalancer support       | `smtp.service.type=NodePort` or `ClusterIP`                             |
+| a cloud that allows port 25| `smtp.mode=forward` + a cheap external VPS running the same image       |
+| PostgreSQL                 | `database.url=sqlite:////data/dmarc.db` + `persistence.enabled=true`    |
+| a secrets operator         | inline values, or point at your own `existingSecret`                    |
 
-| You don't have…            | Then…                                                                 |
-|----------------------------|-----------------------------------------------------------------------|
-| an ingress controller      | `web.ingress.enabled=false` (default) — expose the Service yourself   |
-| cert-manager               | leave `web.ingress.certManager.clusterIssuer` empty, bring TLS or none |
-| LoadBalancer support       | `smtp.service.type=NodePort` or `ClusterIP`                            |
-| a cloud that allows port 25| `smtp.mode=forward` + a cheap external VPS running the same chart/image |
-| PostgreSQL                 | `database.url=sqlite:////data/dmarc.db` + `persistence.enabled=true` (single replica, small installs) |
-| a secrets operator         | put the DB URL/tokens straight into values, or reference an `existingSecret` |
+### Intake rules (deliberate — do not "harden" these)
 
-See [`chart/dmarc-service/values.yaml`](chart/dmarc-service/values.yaml) for
-the full surface.
-
-### Intake rules (important, and deliberate)
-
-- Accept mail from **anyone** — report mail authenticates as google.com,
-  microsoft.com, etc. Never filter inbound reports by SPF/DMARC alignment
-  against your own domains: you would reject your own data.
-- **No greylisting** — deferred report senders back off; some stop retrying.
-- **50 MB default size limit** — big senders produce big aggregate reports,
-  and a size bounce is data you don't get again.
-- Report addresses are **bearer tokens**: anyone who learns one can inject
-  fake reports. They are random, rotatable (two active addresses per domain
-  during rollover), and have no `+` addressing.
-- The TLS-RPT HTTPS endpoint (`POST /tlsrpt`) is unauthenticated by design
-  (RFC 8460) and must be reachable with a publicly valid certificate.
+- **Accept mail from anyone.** Report mail authenticates as google.com,
+  microsoft.com, etc. Filtering inbound reports by SPF/DMARC alignment against
+  your own domains rejects your own data.
+- **No greylisting.** Deferred report senders back off; some never retry.
+- **50 MB ceiling.** Large senders produce large aggregate reports, and a size
+  bounce is data you never get again.
+- **Report addresses are bearer tokens.** Anyone who learns one can inject
+  fake reports, so they are random and rotatable.
+- **`/tlsrpt` is unauthenticated** (RFC 8460) and needs a publicly valid
+  certificate. Reports about domains you have not registered are rejected.
 
 ## Configuration
 
-Everything is an environment variable (see `src/dmarc_service/config.py`):
+Every setting is an environment variable (see `src/dmarc_service/config.py`):
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./dmarc.db` | SQLAlchemy URL (PostgreSQL recommended) |
 | `REPORT_HOST` | `localhost` | Hostname report addresses live under |
-| `EXTERNAL_URL` | `http://localhost:8000` | Public base URL (used in TLS-RPT records) |
+| `EXTERNAL_URL` | `http://localhost:8000` | Public base URL (TLS-RPT records, SSO redirect) |
 | `TENANCY_MODE` | `multi` | `multi` or `single` |
 | `CONTROL_PLANE_ENABLED` | `true` | Disable to freeze tenant/domain provisioning |
-| `API_TOKEN` | *(empty)* | Optional static `Bearer` token for automation |
-| `SESSION_SECRET` | *(empty)* | Cookie-signing key; set it to keep UI sessions across restarts |
+| `API_TOKEN` | *(empty)* | Optional static bearer token for automation |
+| `SESSION_SECRET` | *(empty)* | Cookie-signing key; set it to keep sessions across restarts |
 | `INGEST_TOKEN` | *(empty)* | Enables `/api/ingest` for forward-mode edges |
-| `SMTP_MODE` | `direct` | `direct` (store) or `forward` (relay to `/api/ingest`) |
+| `SMTP_MODE` | `direct` | `direct` (store) or `forward` (relay) |
 | `SMTP_FORWARD_URL` / `SMTP_FORWARD_TOKEN` | *(empty)* | Target for forward mode |
 | `SMTP_TLS_CERT` / `SMTP_TLS_KEY` | *(empty)* | Offer STARTTLS when set |
 | `SMTP_MAX_MESSAGE_BYTES` | `52428800` | Inbound message size ceiling |
+
+## API
+
+Interactive documentation at `/docs`. Main endpoints:
+
+| Method & path | Purpose |
+|---|---|
+| `GET /healthz` | health check |
+| `POST /tlsrpt` | TLS-RPT HTTPS endpoint (unauthenticated, per RFC) |
+| `POST /api/ingest` | raw message intake for forward-mode edges |
+| `GET/POST /api/tenants`, `DELETE /api/tenants/{slug}` | tenants |
+| `POST /api/tenants/{slug}/domains`, `DELETE /api/domains/{name}` | domains |
+| `GET /api/domains/{name}/dns?verify=true` | required records + live status |
+| `POST/DELETE /api/domains/{name}/addresses[/{local_part}]` | address rotation |
+| `GET /api/reports`, `/api/reports/{id}`, `/api/tls-reports`, `/api/summary` | data |
 
 ## Development
 
 ```sh
 uv venv && uv pip install -e '.[dev]'
-pytest
+pytest          # unit + end-to-end SMTP, ingest, UI and DNS-check tests
 ruff check .
 ```
+
+Tagging `vX.Y.Z` runs the test suite, publishes the image and Helm chart to
+GHCR, and (when `DEPLOY_SSH_KEY`/`DEPLOY_HOST` secrets exist) deploys to a VPS.
 
 ## License
 
