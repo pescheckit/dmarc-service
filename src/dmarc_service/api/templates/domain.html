@@ -1,3 +1,4 @@
+{% import "_pagination.html" as pager %}
 {% extends "base.html" %}
 {% block title %}{{ domain.name }} - dmarc-service
   <script>
@@ -145,6 +146,7 @@
         </tbody>
       </table>
     </div>
+    {{ pager.bar(pages) }}
   </section>
 
   <section class="section">

@@ -1,0 +1,15 @@
+{% macro bar(pages) %}
+{% if pages and pages.pages > 1 %}
+<div class="pagination">
+  <span class="muted">
+    {{ pages.offset + 1 }}-{{ [pages.offset + 100, pages.total] | min }} of {{ pages.total }}
+  </span>
+  <span class="spacer"></span>
+  {% if pages.prev %}<a class="pagebtn" href="{{ pages.prev }}">Previous</a>
+  {% else %}<span class="pagebtn disabled">Previous</span>{% endif %}
+  <span class="muted">page {{ pages.page }} of {{ pages.pages }}</span>
+  {% if pages.next %}<a class="pagebtn" href="{{ pages.next }}">Next</a>
+  {% else %}<span class="pagebtn disabled">Next</span>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}

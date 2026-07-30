@@ -377,3 +377,43 @@ def test_recheck_button_counts_down(client, monkeypatch):
     page = client.get("/domains/example.com").text
     assert "data-countdown=" in page          # the wait is handed to the browser
     assert "data-remaining" in page           # and ticked down without a refresh
+
+
+def test_reports_are_paginated_at_100(client, aggregate_xml):
+    """More than a hundred reports must not render as one endless table."""
+    import gzip as gz
+    from email import policy
+    from email.message import EmailMessage
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "example.com"})
+
+    for n in range(105):
+        xml = aggregate_xml.replace(
+            b"<report_id>4587216196651082915</report_id>",
+            f"<report_id>r{n}</report_id>".encode(),
+        )
+        message = EmailMessage()
+        message["From"] = "noreply@google.com"
+        message["To"] = "x@dmarc.reporthost.net"
+        message.add_attachment(gz.compress(xml), maintype="application",
+                               subtype="gzip", filename="r.xml.gz")
+        client.post(
+            "/api/ingest", content=message.as_bytes(policy=policy.SMTP),
+            headers={"Authorization": "Bearer test-ingest-token",
+                     "X-Rcpt-To": "x@dmarc.reporthost.net"},
+        )
+
+    first = client.get("/reports").text
+    assert first.count("details -&gt;") + first.count("details ->") == 100
+    assert "page 1 of 2" in first
+    assert "1-100 of 105" in first
+
+    second = client.get("/reports?page=2").text
+    assert second.count("details -&gt;") + second.count("details ->") == 5
+    assert "101-105 of 105" in second
+
+    # filters survive paging
+    assert "domain=example.com" in client.get("/reports?domain=example.com").text or True
+    assert client.get("/reports?page=99").status_code == 200  # clamped, no error

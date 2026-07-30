@@ -26,7 +26,32 @@ from dmarc_service.db.models import (
 from dmarc_service.db.session import session_scope
 
 router = APIRouter(include_in_schema=False)
+
+# Table views never render more than this at once.
+PER_PAGE = 100
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+
+def _pagination(request: Request, page: int, total: int) -> dict:
+    """Page links that keep whatever filters are already in the URL."""
+    from urllib.parse import urlencode
+
+    pages = max(1, -(-total // PER_PAGE))  # ceiling division
+    page = min(max(page, 1), pages)
+
+    def link(target: int) -> str:
+        params = dict(request.query_params)
+        params["page"] = str(target)
+        return f"{request.url.path}?{urlencode(params)}"
+
+    return {
+        "page": page,
+        "pages": pages,
+        "total": total,
+        "offset": (page - 1) * PER_PAGE,
+        "prev": link(page - 1) if page > 1 else "",
+        "next": link(page + 1) if page < pages else "",
+    }
 
 
 def _current_user(request: Request, db) -> User | None:
@@ -266,7 +291,7 @@ def add_domain_form(request: Request, slug: str, name: str = Form(...)):
 
 
 @router.get("/domains/{name}", response_class=HTMLResponse)
-def domain_page(request: Request, name: str):
+def domain_page(request: Request, name: str, page: int = 1):
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
@@ -287,18 +312,24 @@ def domain_page(request: Request, name: str):
             {"local_part": a.local_part, "active": a.active}
             for a in sorted(domain.addresses, key=lambda a: (not a.active, a.local_part))
         ]
+        total_reports = db.scalar(
+            select(func.count(AggregateReport.id))
+            .where(AggregateReport.policy_domain == domain.name)
+        ) or 0
+        pages = _pagination(request, page, total_reports)
         reports = db.scalars(
             select(AggregateReport)
             .where(AggregateReport.policy_domain == domain.name)
             .order_by(AggregateReport.date_end.desc())
-            .limit(20)
+            .limit(PER_PAGE)
+            .offset(pages["offset"])
         ).all()
         rows = [_report_row(db, r) for r in reports]
         return templates.TemplateResponse(
             request,
             "domain.html",
             _ctx(request, user, domain={"name": domain.name}, dns=dns,
-                 addresses=addresses, reports=rows, summary=summary,
+                 addresses=addresses, reports=rows, summary=summary, pages=pages,
                  just_checked=request.session.pop("dns_rechecked", False),
                  checked_age=int(checked_age) if checked_age is not None else None,
                  recheck_wait=int(control_plane.DNS_RECHECK_INTERVAL - checked_age)
@@ -337,7 +368,7 @@ def deactivate_address_form(request: Request, name: str, local_part: str):
 
 
 @router.get("/reports/{report_id}", response_class=HTMLResponse)
-def report_page(request: Request, report_id: int):
+def report_page(request: Request, report_id: int, page: int = 1):
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
@@ -350,8 +381,10 @@ def report_page(request: Request, report_id: int):
 
         intel = enrich.enrich_ips(db, [r.source_ip for r in report.records])
         spf_networks = spf_module.cached_expand(report.policy_domain)
+        ordered = sorted(report.records, key=lambda r: -r.count)
+        pages = _pagination(request, page, len(ordered))
         records = []
-        for r in sorted(report.records, key=lambda r: -r.count):
+        for r in ordered[pages["offset"]:pages["offset"] + PER_PAGE]:
             ok = r.dkim_result == "pass" or r.spf_result == "pass"
             # Who actually sent it: the domain that authenticated, if any -
             # this is what separates "our misconfigured tool" from spoofing.
@@ -376,7 +409,7 @@ def report_page(request: Request, report_id: int):
         return templates.TemplateResponse(
             request,
             "report.html",
-            _ctx(request, user, report=_report_row(db, report), records=records),
+            _ctx(request, user, report=_report_row(db, report), records=records, pages=pages),
         )
 
 
@@ -604,7 +637,9 @@ async def upload_reports(request: Request, files: list[UploadFile] = File(...)):
 
 
 @router.get("/reports", response_class=HTMLResponse)
-def reports_page(request: Request, domain: str = "", tenant: str = "", day: str = ""):
+def reports_page(
+    request: Request, domain: str = "", tenant: str = "", day: str = "", page: int = 1
+):
     from datetime import date, datetime, time
 
     with session_scope() as db:
@@ -631,7 +666,11 @@ def reports_page(request: Request, domain: str = "", tenant: str = "", day: str 
             query = query.where(
                 AggregateReport.date_begin <= day_end, AggregateReport.date_end >= day_start
             )
-        reports = db.scalars(query.limit(200)).all()
+        total = db.scalar(
+            select(func.count()).select_from(query.order_by(None).subquery())
+        ) or 0
+        pages = _pagination(request, page, total)
+        reports = db.scalars(query.limit(PER_PAGE).offset(pages["offset"])).all()
         rows = [_report_row(db, r) for r in reports]
         options = _filter_options(db, tenant)
         return templates.TemplateResponse(
@@ -639,7 +678,7 @@ def reports_page(request: Request, domain: str = "", tenant: str = "", day: str 
             "reports.html",
             _ctx(request, user, reports=rows, domains=options["domains"],
                  tenants=options["tenants"], domain=domain, tenant=tenant,
-                 day=picked.isoformat() if picked else ""),
+                 pages=pages, day=picked.isoformat() if picked else ""),
         )
 
 

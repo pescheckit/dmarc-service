@@ -133,6 +133,15 @@
     svg .tick { fill: var(--ink-2); font-size: 11px; font-family: system-ui, sans-serif; }
     svg a rect:hover { opacity: .85; }
 
+    .pagination { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+                  margin-top: var(--s3); }
+    .pagination .spacer { flex: 1; }
+    .pagebtn { padding: var(--s2) var(--s4); border: 1px solid var(--border);
+               border-radius: 7px; text-decoration: none; color: var(--ink);
+               background: var(--card); font-size: .92rem; }
+    .pagebtn:hover { border-color: var(--ink-2); }
+    .pagebtn.disabled { opacity: .4; }
+
     details { margin-top: var(--s4); }
     details summary { cursor: pointer; padding: var(--s2) 0; }
     details > .table-wrap { margin-top: var(--s3); }

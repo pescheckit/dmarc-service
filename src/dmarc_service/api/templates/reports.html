@@ -1,3 +1,4 @@
+{% import "_pagination.html" as pager %}
 {% extends "base.html" %}
 {% block title %}Reports - dmarc-service{% endblock %}
 {% block content %}
@@ -48,4 +49,5 @@
     </tbody>
     </table>
   </div>
+  {{ pager.bar(pages) }}
 {% endblock %}
