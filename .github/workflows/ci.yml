@@ -69,6 +69,9 @@ jobs:
     needs: [release]
     runs-on: ubuntu-latest
     steps:
+      # The compose file and proxy config are copied to the host, so the
+      # deploy job needs the repository too.
+      - uses: actions/checkout@v4
       - name: Deploy over SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
