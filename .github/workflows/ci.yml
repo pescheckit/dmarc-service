@@ -61,3 +61,23 @@ jobs:
             --app-version "${{ steps.version.outputs.version }}"
           helm push "dmarc-service-${{ steps.version.outputs.version }}.tgz" \
             "oci://ghcr.io/${{ github.repository_owner }}/charts"
+
+  deploy:
+    # Auto-deploys tagged releases to the VPS when the repo has DEPLOY_SSH_KEY
+    # and DEPLOY_HOST secrets configured (fork-friendly: skipped otherwise).
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_HOST" ]; then
+            echo "deploy secrets not configured; skipping"; exit 0
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "root@$DEPLOY_HOST" \
+            'cd /opt/dmarc && docker compose pull --quiet && systemctl restart dmarc && sleep 15 && docker ps --format "{{.Names}} {{.Status}}"'
