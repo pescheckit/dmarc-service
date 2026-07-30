@@ -9,6 +9,10 @@ RUN uv venv /opt/venv && uv pip install --python /opt/venv/bin/python --no-cache
 
 FROM python:3.12-slim
 
+# pg_dump for `dmarc-service backup`
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 7700 --create-home dmarc
 COPY --from=build /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"

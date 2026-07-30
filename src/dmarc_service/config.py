@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # Required for /api/ingest; the endpoint is disabled when empty.
     ingest_token: str = ""
 
+    # Backups. One URL holds everything needed:
+    #   s3://<access-key>:<secret-key>@<endpoint-host>/<bucket>[/<prefix>]
+    # e.g. s3://KEY:SECRET@s3.eu-central-1.wasabisys.com/dmarc-backups/prod
+    backup_s3_url: str = ""
+    backup_retention_days: int = 30
+
     # Web
     web_host: str = "0.0.0.0"
     web_port: int = 8000

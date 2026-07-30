@@ -53,7 +53,7 @@ def test_ui_domain_flow_shows_dns_records(client):
 
 def test_personal_api_token_roundtrip(client):
     client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
-    page = client.post("/settings/tokens", data={"name": "ci"}, follow_redirects=True).text
+    page = client.post("/profile/tokens", data={"name": "ci"}, follow_redirects=True).text
     token = page.split("<code class=\"rec\">")[1].split("</code>")[0]
     assert token.startswith("dmk_")
 
@@ -63,8 +63,8 @@ def test_personal_api_token_roundtrip(client):
     assert response.status_code == 200
 
     # revoke -> token dies
-    token_id = page.split('action="/settings/tokens/')[1].split("/revoke")[0]
-    client.post(f"/settings/tokens/{token_id}/revoke")
+    token_id = page.split('action="/profile/tokens/')[1].split("/revoke")[0]
+    client.post(f"/profile/tokens/{token_id}/revoke")
     response = client.get("/api/reports", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
 
@@ -342,12 +342,12 @@ def test_sso_user_can_set_a_password_to_avoid_lockout(client, monkeypatch):
     client.get("/auth/sso/callback?code=x&state=y")
 
     # the SSO-only account is warned and offered a password
-    page = client.get("/settings").text
+    page = client.get("/profile").text
     assert "can only sign in through SSO" in page
     assert "Set password" in page
 
-    client.post("/settings/password", data={"new_password": "fallback-pass"})
-    assert "can only sign in through SSO" not in client.get("/settings").text
+    client.post("/profile/password", data={"new_password": "fallback-pass"})
+    assert "can only sign in through SSO" not in client.get("/profile").text
 
     # the password now works even if SSO breaks
     client.post("/logout")
@@ -358,9 +358,9 @@ def test_sso_user_can_set_a_password_to_avoid_lockout(client, monkeypatch):
 
 def test_password_change_requires_the_current_one(client):
     client.post("/setup", data={"email": "admin@b.nl", "password": "longenough"})
-    page = client.post("/settings/password",
+    page = client.post("/profile/password",
                        data={"current_password": "wrong", "new_password": "newpassword"}).text
     assert "current password is wrong" in page
-    page = client.post("/settings/password",
+    page = client.post("/profile/password",
                        data={"current_password": "longenough", "new_password": "newpassword"}).text
     assert "password updated" in page

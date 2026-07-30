@@ -151,9 +151,12 @@
     <a href="/upload" class="{{ 'active' if request.url.path.startswith('/upload') }}">Upload</a>
     <a href="/tenants" class="{{ 'active' if request.url.path.startswith('/tenants') }}">Tenants &amp; domains</a>
     <a href="/docs" target="_blank" rel="noopener">API </a>
+    {% if user.is_admin %}
     <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}">Settings</a>
+    {% endif %}
     <span class="spacer"></span>
-    <span class="who">{{ report_host }} | {{ user.email }}</span>
+    <span class="who">{{ report_host }}</span>
+    <a href="/profile" class="{{ 'active' if request.url.path.startswith('/profile') }}">{{ user.email }}</a>
     <form class="inline" method="post" action="/logout"><button>Log out</button></form>
   </nav>
   <main>

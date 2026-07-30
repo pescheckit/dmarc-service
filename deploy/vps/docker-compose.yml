@@ -30,6 +30,8 @@ services:
       API_TOKEN: ${API_TOKEN:-}
       INGEST_TOKEN: ${INGEST_TOKEN:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
+      BACKUP_S3_URL: ${BACKUP_S3_URL:-}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
     depends_on:
       postgres:
         condition: service_healthy

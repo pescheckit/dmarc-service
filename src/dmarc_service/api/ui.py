@@ -655,8 +655,9 @@ def delete_tenant_form(request: Request, slug: str):
 # --- settings: personal API tokens + admin (SSO, users) ---
 
 
-@router.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
+@router.get("/profile", response_class=HTMLResponse)
+def profile_page(request: Request):
+    """Personal settings: password and API tokens."""
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
@@ -667,6 +668,29 @@ def settings_page(request: Request):
                 select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.id)
             )
         ]
+        return templates.TemplateResponse(
+            request,
+            "profile.html",
+            _ctx(
+                request,
+                user,
+                tokens=tokens,
+                new_token=request.session.pop("new_token", None),
+                settings_error=request.session.pop("settings_error", ""),
+                settings_notice=request.session.pop("settings_notice", ""),
+                has_password=user.password_hash is not None,
+            ),
+        )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        if not user.is_admin:
+            return RedirectResponse("/profile", status_code=303)
         provider = auth.get_provider(db)
         users = []
         if user.is_admin:
@@ -686,7 +710,6 @@ def settings_page(request: Request):
                 }
                 for u in db.scalars(select(User).order_by(User.email))
             ]
-        new_token = request.session.pop("new_token", None)
         settings_error = request.session.pop("settings_error", "")
         settings_notice = request.session.pop("settings_notice", "")
         return templates.TemplateResponse(
@@ -695,11 +718,8 @@ def settings_page(request: Request):
             _ctx(
                 request,
                 user,
-                tokens=tokens,
-                new_token=new_token,
                 settings_error=settings_error,
                 settings_notice=settings_notice,
-                has_password=user.password_hash is not None,
                 users=users,
                 sso={
                     "configured": provider is not None,
@@ -712,27 +732,27 @@ def settings_page(request: Request):
         )
 
 
-@router.post("/settings/tokens")
+@router.post("/profile/tokens")
 def create_token(request: Request, name: str = Form("token")):
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
             return _login_redirect(db)
         request.session["new_token"] = auth.mint_api_token(db, user, name)
-    return RedirectResponse("/settings", status_code=303)
+    return RedirectResponse("/profile", status_code=303)
 
 
-@router.post("/settings/tokens/{token_id}/revoke")
+@router.post("/profile/tokens/{token_id}/revoke")
 def revoke_token(request: Request, token_id: int):
     with session_scope() as db:
         user = _current_user(request, db)
         if user is None:
             return _login_redirect(db)
         auth.revoke_api_token(db, user, token_id)
-    return RedirectResponse("/settings", status_code=303)
+    return RedirectResponse("/profile", status_code=303)
 
 
-@router.post("/settings/password")
+@router.post("/profile/password")
 def change_password(
     request: Request,
     current_password: str = Form(""),
@@ -751,7 +771,7 @@ def change_password(
         else:
             auth.set_password(db, user, new_password)
             request.session["settings_notice"] = "password updated"
-    return RedirectResponse("/settings", status_code=303)
+    return RedirectResponse("/profile", status_code=303)
 
 
 @router.post("/settings/users/{email}/role")

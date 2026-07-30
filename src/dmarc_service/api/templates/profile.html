@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Profile - dmarc-service{% endblock %}
+{% block content %}
+  <h1>{{ user.email }}</h1>
+  <p class="muted">{{ "Administrator" if user.is_admin else "User" }}</p>
+
+  {% if settings_notice %}<p class="ok">{{ settings_notice }}</p>{% endif %}
+  {% if settings_error %}<p class="error">{{ settings_error }}</p>{% endif %}
+
+  <section class="section" style="margin-top:0">
+    <h2>Your password</h2>
+    {% if not has_password %}
+    <div class="banner banner-bad">
+      <div>
+        <strong class="bad">This account can only sign in through SSO</strong>
+        <div class="muted">Set a password as a fallback. Without one, a broken or
+        changed SSO configuration locks you out of this account entirely.</div>
+      </div>
+    </div>
+    {% endif %}
+    <form method="post" action="/profile/password" style="display:grid; gap:.5rem; max-width:24rem">
+      {% if has_password %}
+      <input type="password" name="current_password" placeholder="Current password" required>
+      {% endif %}
+      <input type="password" name="new_password" placeholder="New password (min 8 chars)" minlength="8" required>
+      <div><button type="submit">{{ "Change password" if has_password else "Set password" }}</button></div>
+    </form>
+  </section>
+
+  <section class="section">
+    <h2>Your API tokens</h2>
+    <p class="muted">Use as <code>Authorization: Bearer &lt;token&gt;</code> on <code>/api/*</code> -
+    see the <a href="/docs" target="_blank" rel="noopener">interactive API documentation </a>.
+    Tokens are shown once and stored hashed.</p>
+
+    {% if new_token %}
+    <div class="banner banner-ok">
+      <div>
+        <strong>New token - copy it now, it will not be shown again</strong>
+        <div class="muted"><code class="rec">{{ new_token }}</code></div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Token</th><th class="nowrap">Created</th><th class="actions"></th></tr></thead>
+        <tbody>
+          {% for t in tokens %}
+          <tr>
+            <td>{{ t.name }}</td>
+            <td><code class="rec">{{ t.prefix }}...</code></td>
+            <td class="nowrap">{{ t.created_at.strftime("%Y-%m-%d") }}</td>
+            <td class="actions">
+              <form class="inline" method="post" action="/profile/tokens/{{ t.id }}/revoke">
+                <button class="danger">Revoke</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No tokens yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="row-actions">
+      <form class="inline" method="post" action="/profile/tokens">
+        <input type="text" name="name" placeholder="token name (e.g. ci)">
+        <button type="submit">Create token</button>
+      </form>
+    </div>
+  </section>
+
+{% endblock %}

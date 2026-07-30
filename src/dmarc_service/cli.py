@@ -11,6 +11,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("smtp", help="run the SMTP report receiver")
     sub.add_parser("migrate", help="create/upgrade the database schema")
     sub.add_parser("enrich", help="resolve owners for source IPs seen in reports")
+    sub.add_parser("backup", help="dump the database to S3-compatible storage")
 
     # Break-glass: run these on the server when nobody can sign in, for
     # example after an SSO misconfiguration locked out the only admin.
@@ -48,6 +49,13 @@ def main(argv: list[str] | None = None) -> None:
 
         with session_scope() as db:
             print(f"resolved {backfill(db)} IP(s)")
+    elif args.command == "backup":
+        import logging
+
+        from dmarc_service.backup import run
+
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+        print(f"backed up to {run()}")
     elif args.command == "set-password":
         import getpass
 

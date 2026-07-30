@@ -43,6 +43,13 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 - **Address rotation**: mint a second address, publish it, then deactivate the
   old one - both accept mail during the overlap, so no report is lost.
 
+**Backups**
+- `dmarc-service backup` dumps the database, uploads it to any S3-compatible
+  storage (Wasabi, AWS, Scaleway, MinIO, Backblaze) and deletes copies past the
+  retention window. Configured with a single URL:
+  `BACKUP_S3_URL=s3://<key>:<secret>@<endpoint-host>/<bucket>[/<prefix>]`.
+  Aggregate reports cannot be re-fetched, so a lost database is lost history.
+
 **Manual import**
 - Upload page (and `POST /upload`) for importing report files by hand: `.zip`,
   `.gz`, raw `.xml` / `.json`, or whole `.eml` messages, several at a time.
@@ -159,6 +166,8 @@ Every setting is an environment variable (see `src/dmarc_service/config.py`):
 | `SMTP_FORWARD_URL` / `SMTP_FORWARD_TOKEN` | *(empty)* | Target for forward mode |
 | `SMTP_TLS_CERT` / `SMTP_TLS_KEY` | *(empty)* | Offer STARTTLS when set |
 | `SMTP_MAX_MESSAGE_BYTES` | `52428800` | Inbound message size ceiling |
+| `BACKUP_S3_URL` | *(empty)* | `s3://key:secret@endpoint/bucket[/prefix]`; empty disables backups |
+| `BACKUP_RETENTION_DAYS` | `30` | Delete backups older than this (0 keeps everything) |
 
 ## API
 
