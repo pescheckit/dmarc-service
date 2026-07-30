@@ -11,6 +11,8 @@ fails, and from where.
 Runs on a single VPS with Docker Compose, or on Kubernetes with the bundled
 Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 
+**[See the feature tour with screenshots](docs/FEATURES.md)**
+
 ## Features
 
 **Report intake**
