@@ -135,7 +135,9 @@ def test_dns_check_and_deletion(client, monkeypatch):
     assert ">missing<" in page
 
     tenants = client.get("/tenants").text
-    assert "2/3 live" in tenants  # _dmarc ok + EDV ok, _smtp._tls missing
+    # only the domain owner's own records are counted; the operator's
+    # verification record is reported separately
+    assert "1/2 live" in tenants
 
     # delete domain, then tenant
     assert client.post("/domains/example.com/delete", follow_redirects=False).status_code == 303

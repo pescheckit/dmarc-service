@@ -237,15 +237,19 @@ def tenants_page(request: Request, error: str = ""):
                 checks = control_plane.check_dns_records(
                     control_plane.required_dns_records(db, d)
                 )
-                ok = sum(1 for c in checks if c["status"] == "ok")
+                # Count only what the domain owner publishes; the verification
+                # record is the operator's job and is reported separately.
+                theirs = [c for c in checks if c["published_by"] == "tenant"]
+                ours = [c for c in checks if c["published_by"] == "operator"]
                 domains.append(
                     {
                         "name": d.name,
                         "addresses": [
                             a.local_part for a in control_plane.active_addresses(db, d)
                         ],
-                        "dns_ok": ok,
-                        "dns_total": len(checks),
+                        "dns_ok": sum(1 for c in theirs if c["status"] == "ok"),
+                        "dns_total": len(theirs),
+                        "verification_missing": any(c["status"] != "ok" for c in ours),
                     }
                 )
             tenants.append(

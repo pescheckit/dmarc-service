@@ -26,6 +26,9 @@
             <td class="nowrap">
               {% if domain.dns_ok == domain.dns_total %}<span class="ok">{{ domain.dns_ok }}/{{ domain.dns_total }} live</span>
               {% else %}<span class="bad">{{ domain.dns_ok }}/{{ domain.dns_total }} live</span>{% endif %}
+              {% if domain.verification_missing %}
+              <span class="sub bad">verification record missing</span>
+              {% endif %}
             </td>
             <td class="actions"><a href="/domains/{{ domain.name }}">DNS records -></a></td>
           </tr>
