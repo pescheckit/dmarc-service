@@ -364,3 +364,16 @@ def test_password_change_requires_the_current_one(client):
     page = client.post("/profile/password",
                        data={"current_password": "longenough", "new_password": "newpassword"}).text
     assert "password updated" in page
+
+
+def test_recheck_button_counts_down(client, monkeypatch):
+    from dmarc_service.control_plane import service as cp
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "example.com"})
+    monkeypatch.setattr(cp, "_resolve_txt", lambda name: ["v=DMARC1"])
+
+    page = client.get("/domains/example.com").text
+    assert "data-countdown=" in page          # the wait is handed to the browser
+    assert "data-remaining" in page           # and ticked down without a refresh

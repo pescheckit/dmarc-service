@@ -1,5 +1,27 @@
 {% extends "base.html" %}
-{% block title %}{{ domain.name }} - dmarc-service{% endblock %}
+{% block title %}{{ domain.name }} - dmarc-service
+  <script>
+    // The wait is rendered server-side; tick it down so the button becomes
+    // usable without a page refresh.
+    (function () {
+      var button = document.querySelector("button[data-countdown]");
+      if (!button) return;
+      var remaining = parseInt(button.dataset.countdown, 10);
+      var label = button.querySelector("[data-remaining]");
+      var timer = setInterval(function () {
+        remaining -= 1;
+        if (remaining > 0) {
+          label.textContent = remaining;
+          return;
+        }
+        clearInterval(timer);
+        button.disabled = false;
+        button.removeAttribute("title");
+        button.textContent = "Re-check now";
+      }, 1000);
+    })();
+  </script>
+{% endblock %}
 {% block content %}
   <h1>{{ domain.name }}</h1>
 
@@ -23,7 +45,9 @@
     </div>
     <form class="inline" method="post" action="/domains/{{ domain.name }}/dns/recheck">
       {% if recheck_wait %}
-      <button disabled title="rate limited to once a minute">Re-check in {{ recheck_wait }}s</button>
+      <button disabled data-countdown="{{ recheck_wait }}" title="rate limited to once a minute">
+        Re-check in <span data-remaining>{{ recheck_wait }}</span>s
+      </button>
       {% else %}
       <button>Re-check now</button>
       {% endif %}
@@ -133,4 +157,26 @@
       </form>
     </div>
   </section>
+
+  <script>
+    // The wait is rendered server-side; tick it down so the button becomes
+    // usable without a page refresh.
+    (function () {
+      var button = document.querySelector("button[data-countdown]");
+      if (!button) return;
+      var remaining = parseInt(button.dataset.countdown, 10);
+      var label = button.querySelector("[data-remaining]");
+      var timer = setInterval(function () {
+        remaining -= 1;
+        if (remaining > 0) {
+          label.textContent = remaining;
+          return;
+        }
+        clearInterval(timer);
+        button.disabled = false;
+        button.removeAttribute("title");
+        button.textContent = "Re-check now";
+      }, 1000);
+    })();
+  </script>
 {% endblock %}
