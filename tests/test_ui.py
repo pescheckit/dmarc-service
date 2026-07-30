@@ -131,8 +131,8 @@ def test_dns_check_and_deletion(client, monkeypatch):
     control_plane.clear_dns_cache()  # drop lookups cached before the patch
 
     page = client.get("/domains/example.com").text
-    assert " published" in page
-    assert " missing" in page
+    assert ">published<" in page
+    assert ">missing<" in page
 
     tenants = client.get("/tenants").text
     assert "2/3 live" in tenants  # _dmarc ok + EDV ok, _smtp._tls missing
