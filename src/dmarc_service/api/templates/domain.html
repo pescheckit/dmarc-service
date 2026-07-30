@@ -108,7 +108,9 @@
         <strong class="ok">Verification is in place</strong>
         {% else %}
         <strong class="bad">Verification is missing, so reports will not arrive</strong>
-        <div class="muted">Ask the operator of {{ report_host }} to publish
+        <div class="muted">{% if user.is_admin %}You run this service: publish it from
+        <a href="/settings">Settings</a>, which lists every record you owe your
+        tenants. The record is{% else %}Ask the operator of {{ report_host }} to publish{% endif %}
         <code class="rec">{{ r.name }}</code> TXT <code class="rec">{{ r.content }}</code>
         in the <code>{{ r.zone }}</code> zone.</div>
         {% endif %}

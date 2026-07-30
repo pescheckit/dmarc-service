@@ -463,3 +463,23 @@ def test_domain_banner_counts_only_the_owners_records(client, monkeypatch):
     page = client.get("/domains/example.com").text
     assert "Your 2 records are published correctly" in page   # not "3"
     assert "Verification is missing" in page                  # reported separately
+
+
+def test_settings_lists_the_dns_the_operator_must_publish(client, monkeypatch):
+    """Whoever runs the service needs to see the verification records for all
+    tenants; only they can publish them."""
+    from dmarc_service.control_plane import service as cp
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+    client.post("/tenants/acme/domains", data={"name": "customer-one.example"})
+    client.post("/tenants/acme/domains", data={"name": "customer-two.example"})
+
+    monkeypatch.setattr(cp, "_resolve_txt", lambda name: [])
+    cp.clear_dns_cache()
+
+    page = client.get("/settings").text
+    assert "DNS you publish for your tenants" in page
+    assert "customer-one.example._report._dmarc.dmarc.reporthost.net" in page
+    assert "customer-two.example._report._dmarc.dmarc.reporthost.net" in page
+    assert "2 record(s) still to publish" in page

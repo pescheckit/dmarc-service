@@ -31,6 +31,9 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 **Control plane**
 - Multi-tenant: tenants own domains; domains get unguessable, rotatable report
   addresses (bearer tokens, no `+` addressing). Single-tenant mode available.
+- Settings lists every verification record the **operator** owes their tenants,
+  with live status, so running this for other people does not depend on
+  remembering an RFC.
 - Tells you the **exact DNS records to publish** per domain, including the
   external-destination verification record (RFC 7489 section 7.1) when the monitored
   domain and the report host live in different organizational domains.

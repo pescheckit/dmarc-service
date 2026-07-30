@@ -5,7 +5,58 @@
   <h1>Settings</h1>
   <p class="muted">Administration. Your own password and API tokens live under <a href="/profile">your profile</a>.</p>
 
-    <section class="section">
+    <section class="section" style="margin-top:0">
+    <h2>DNS you publish for your tenants</h2>
+    <p class="muted">Reports for a monitored domain are delivered to an address
+    at <code>{{ report_host }}</code>. Receivers only allow that when this zone
+    vouches for the domain (RFC 7489 external destination verification), so one
+    record per domain belongs in <strong>your</strong> DNS, not the tenant's.
+    Add a domain here and the record it needs appears below.</p>
+
+    {% if operator_missing %}
+    <div class="banner banner-bad">
+      <div>
+        <strong class="bad">{{ operator_missing | length }} record(s) still to publish</strong>
+        <div class="muted">Reports for
+          {% for r in operator_missing %}<code>{{ r.domain }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+          will not be delivered until these exist.</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if operator_records %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>For domain</th><th>Name</th><th>Type</th><th>Content</th><th>Live check</th></tr>
+        </thead>
+        <tbody>
+          {% for r in operator_records %}
+          <tr>
+            <td class="nowrap">{{ r.domain }}</td>
+            <td class="nowrap"><code class="rec">{{ r.name }}</code></td>
+            <td>{{ r.type }}</td>
+            <td><code class="rec">{{ r.content }}</code></td>
+            <td class="nowrap">
+              {% if r.status == "ok" %}<span class="ok">published</span>
+              {% elif r.status == "missing" %}<span class="bad">missing</span>
+              {% else %}<span class="warn">{{ r.status }}</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">Enter the name without the trailing
+    <code>{{ report_host.split(".", 1)[1] if "." in report_host else report_host }}</code>
+    if your DNS panel appends the zone itself.</p>
+    {% else %}
+    <p class="muted">Nothing to publish: every monitored domain shares an
+    organizational domain with {{ report_host }}.</p>
+    {% endif %}
+  </section>
+
+  <section class="section">
     <h2>Single sign-on (OIDC)</h2>
     <p class="muted">Works with Azure AD / Entra, Google Workspace, Keycloak, Okta, ... -
     set the redirect URI at your identity provider to <code class="rec">{{ callback_url }}</code>.

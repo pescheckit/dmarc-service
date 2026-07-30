@@ -796,6 +796,17 @@ def settings_page(request: Request, page: int = 1):
             return _login_redirect(db)
         if not user.is_admin:
             return RedirectResponse("/profile", status_code=303)
+        # Everything this installation must publish in its own zone, across
+        # every tenant: without it, receivers refuse to send those reports.
+        operator_records = []
+        for domain in db.scalars(select(Domain).order_by(Domain.name)):
+            for record in control_plane.check_dns_records(
+                control_plane.required_dns_records(db, domain)
+            ):
+                if record["published_by"] == "operator":
+                    operator_records.append({**record, "domain": domain.name})
+        operator_missing = [r for r in operator_records if r["status"] != "ok"]
+
         provider = auth.get_provider(db)
         users = []
         pages = None
@@ -828,6 +839,8 @@ def settings_page(request: Request, page: int = 1):
                 user,
                 settings_error=settings_error,
                 settings_notice=settings_notice,
+                operator_records=operator_records,
+                operator_missing=operator_missing,
                 users=users,
                 pages=pages,
                 sso={
