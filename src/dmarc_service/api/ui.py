@@ -5,8 +5,7 @@ from pathlib import Path
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
 
@@ -281,26 +280,6 @@ def deactivate_address_form(request: Request, name: str, local_part: str):
             if address.local_part == local_part:
                 address.active = False
     return RedirectResponse(f"/domains/{name}", status_code=303)
-
-
-# --- API documentation (login-gated Swagger UI) ---
-
-
-@router.get("/openapi.json")
-def openapi_schema(request: Request):
-    with session_scope() as db:
-        if _current_user(request, db) is None:
-            return _login_redirect(db)
-    schema = request.app.openapi()
-    return JSONResponse(schema)
-
-
-@router.get("/docs", response_class=HTMLResponse)
-def api_docs(request: Request):
-    with session_scope() as db:
-        if _current_user(request, db) is None:
-            return _login_redirect(db)
-    return get_swagger_ui_html(openapi_url="/openapi.json", title="dmarc-service API")
 
 
 @router.get("/reports/{report_id}", response_class=HTMLResponse)

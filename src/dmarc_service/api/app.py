@@ -30,13 +30,13 @@ async def lifespan(app: FastAPI):
     yield
 
 
-# Docs are re-served behind UI login (see api/ui.py), not exposed publicly.
+# API docs are public by design: they only describe the API surface (which
+# is open source anyway); every endpoint they document requires a token.
 app = FastAPI(
     title="dmarc-service",
     lifespan=lifespan,
-    docs_url=None,
+    docs_url="/docs",
     redoc_url=None,
-    openapi_url=None,
 )
 app.add_middleware(
     SessionMiddleware,

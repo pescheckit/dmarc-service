@@ -106,8 +106,7 @@ def test_report_detail_and_docs(client, aggregate_xml):
     assert "spammer.example" in detail.text        # authenticated-as hint
     assert "7 passed" in detail.text and "3 failed" in detail.text
 
-    # API docs behind login
+    # API docs are public: shape only, endpoints still need tokens
+    client.post("/logout")
     assert client.get("/docs").status_code == 200
     assert "/api/reports" in client.get("/openapi.json").text
-    client.post("/logout")
-    assert client.get("/docs", follow_redirects=False).status_code == 303
