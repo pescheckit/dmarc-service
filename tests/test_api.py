@@ -60,6 +60,12 @@ def test_ingest_endpoint_requires_token(client, aggregate_xml, tlsrpt_json):
 
 
 def test_tlsrpt_endpoint_unauthenticated(client, tlsrpt_json):
+    # reports about unregistered domains are rejected (injection hardening)
+    response = client.post("/tlsrpt", content=tlsrpt_json)
+    assert response.status_code == 400
+
+    client.post("/api/tenants", json={"slug": "acme", "name": "Acme"})
+    client.post("/api/tenants/acme/domains", json={"name": "example.com"})
     response = client.post(
         "/tlsrpt", content=gzip.compress(tlsrpt_json),
         headers={"Content-Type": "application/tlsrpt+gzip"},

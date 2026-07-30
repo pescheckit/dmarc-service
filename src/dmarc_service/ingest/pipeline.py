@@ -198,6 +198,19 @@ def _store_tlsrpt(
 
 
 def process_tlsrpt_http(session: Session, document: bytes) -> bool:
-    """TLS-RPT delivered via the https rua endpoint (no MIME envelope)."""
+    """TLS-RPT delivered via the https rua endpoint (no MIME envelope).
+
+    The endpoint is unauthenticated per RFC 8460, so anyone can POST here.
+    Legit senders only do so because our own _smtp._tls record for one of our
+    registered domains pointed them at this URL — therefore reports about
+    unregistered domains are rejected outright to limit fake-report injection.
+    """
     parsed = parsers.parse_tlsrpt_json(document)
-    return _store_tlsrpt(session, parsed, None, None, None, source="https")
+    known = [
+        d
+        for name in parsed.policy_domains
+        if (d := session.scalar(select(Domain).where(Domain.name == name))) is not None
+    ]
+    if not known:
+        raise ValueError("report does not concern any registered domain")
+    return _store_tlsrpt(session, parsed, None, known[0].tenant_id, known[0].id, source="https")
