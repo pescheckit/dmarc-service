@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}dmarc-service{% endblock %}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 76rem; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; } h2 { font-size: 1.15rem; margin-top: 2rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8884; vertical-align: top; }
+    th { font-weight: 600; }
+    .muted { opacity: .7; font-size: .9rem; }
+    .pill { border: 1px solid #8886; border-radius: 999px; padding: .1rem .6rem; font-size: .85rem; }
+    nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: baseline; }
+    nav a { text-decoration: none; }
+    nav .spacer { flex: 1; }
+    form.inline { display: inline; }
+    input[type=text], input[type=password] { padding: .35rem .5rem; border: 1px solid #8886; border-radius: 4px; background: transparent; color: inherit; }
+    button { padding: .35rem .8rem; border: 1px solid #8886; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
+    button:hover { border-color: #888; }
+    code.rec { font-size: .85rem; word-break: break-all; }
+    .error { color: #c33; }
+  </style>
+</head>
+<body>
+  <nav>
+    <strong>dmarc-service</strong>
+    <a href="/">Reports</a>
+    <a href="/tenants">Tenants &amp; domains</a>
+    <a href="/settings">Settings</a>
+    <span class="spacer"></span>
+    <span class="muted">{{ report_host }} · {{ user.email }}</span>
+    <form class="inline" method="post" action="/logout"><button>Log out</button></form>
+  </nav>
+  {% block content %}{% endblock %}
+</body>
+</html>

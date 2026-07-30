@@ -34,11 +34,15 @@ persistence:  # only used for the SQLite fallback
   accessModes: [ReadWriteOnce]
 
 auth:
-  # Bearer token required on /api/* (empty = API open; protect it upstream).
+  # Static bearer token for /api/* automation. Optional: users can also mint
+  # personal API tokens in the UI (first account created becomes the admin,
+  # which can configure OIDC SSO for everyone else).
   apiToken: ""
   # Token forward-mode edges use against /api/ingest (empty = endpoint off).
   ingestToken: ""
-  # Or bring your own Secret with keys API_TOKEN / INGEST_TOKEN.
+  # Cookie-signing key for UI sessions; empty = random per pod restart.
+  sessionSecret: ""
+  # Or bring your own Secret with keys API_TOKEN / INGEST_TOKEN / SESSION_SECRET.
   existingSecret: ""
 
 web:

@@ -29,6 +29,7 @@ services:
       EXTERNAL_URL: https://${REPORT_HOST}
       API_TOKEN: ${API_TOKEN:-}
       INGEST_TOKEN: ${INGEST_TOKEN:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

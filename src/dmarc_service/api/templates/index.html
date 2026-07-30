@@ -1,24 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dmarc-service</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 72rem; padding: 0 1rem; }
-    h1 { font-size: 1.4rem; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8884; }
-    th { font-weight: 600; }
-    .muted { opacity: .7; font-size: .9rem; }
-    .pill { border: 1px solid #8886; border-radius: 999px; padding: .1rem .6rem; font-size: .85rem; }
-  </style>
-</head>
-<body>
-  <h1>dmarc-service <span class="muted">— {{ report_host }}</span></h1>
+{% extends "base.html" %}
+{% block content %}
+  <h1>Latest aggregate reports</h1>
   <p class="muted">
-    Latest aggregate reports.
     {% if unrouted %}<span class="pill">{{ unrouted }} unrouted message(s) in quarantine</span>{% endif %}
   </p>
   <table>
@@ -35,9 +18,8 @@
         <td>{{ r.message_count }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="muted">No reports yet. Publish your DNS records and wait for the first sender cycle (~24h).</td></tr>
+      <tr><td colspan="5" class="muted">No reports yet. Add a domain under “Tenants &amp; domains”, publish its DNS records, and wait for the first sender cycle (~24h).</td></tr>
       {% endfor %}
     </tbody>
   </table>
-</body>
-</html>
+{% endblock %}

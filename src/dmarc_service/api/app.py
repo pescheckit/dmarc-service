@@ -1,14 +1,13 @@
-"""FastAPI application: JSON API, TLS-RPT https endpoint, minimal HTML UI."""
+"""FastAPI application: JSON API, TLS-RPT https endpoint, and the web UI."""
 
 import gzip
+import secrets
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from starlette.middleware.sessions import SessionMiddleware
 
 from dmarc_service.config import get_settings
 from dmarc_service.control_plane import service as control_plane
@@ -23,8 +22,6 @@ from dmarc_service.db.models import (
 from dmarc_service.db.session import session_scope
 from dmarc_service.ingest.pipeline import process_message, process_tlsrpt_http
 
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -34,17 +31,37 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="dmarc-service", lifespan=lifespan)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=get_settings().session_secret or secrets.token_hex(32),
+    same_site="lax",
+    https_only=False,  # cookie Secure flag is the proxy's concern
+)
+
+from dmarc_service.api import ui  # noqa: E402  (router needs `app` patterns above)
+
+app.include_router(ui.router)
 
 
 # --- auth dependencies ---
 
 
 def require_api_token(authorization: str = Header(default="")) -> None:
+    """Accepts the static API_TOKEN (automation/back-compat) or any personal
+    token minted in the UI. The API is only open when neither exists —
+    i.e. a fresh install that hasn't completed /setup yet."""
+    from dmarc_service.auth import service as auth
+
     settings = get_settings()
-    if not settings.api_token:
+    bearer = authorization.removeprefix("Bearer ").strip()
+    if settings.api_token and bearer == settings.api_token:
         return
-    if authorization != f"Bearer {settings.api_token}":
-        raise HTTPException(status_code=401, detail="invalid or missing API token")
+    with session_scope() as db:
+        if bearer and auth.resolve_api_token(db, bearer) is not None:
+            return
+        if not settings.api_token and auth.user_count(db) == 0:
+            return  # bootstrap: nothing to authenticate against yet
+    raise HTTPException(status_code=401, detail="invalid or missing API token")
 
 
 def require_ingest_token(authorization: str = Header(default="")) -> None:
@@ -315,24 +332,7 @@ def _report_summary(db, report: AggregateReport) -> dict:
     }
 
 
-# --- minimal UI ---
-
-
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    with session_scope() as db:
-        reports = db.scalars(
-            select(AggregateReport).order_by(AggregateReport.date_end.desc()).limit(50)
-        ).all()
-        rows = [_report_summary(db, r) for r in reports]
-        unrouted = db.scalar(
-            select(func.count(RawMessage.id)).where(RawMessage.status == "unrouted")
-        )
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {"reports": rows, "unrouted": unrouted, "report_host": get_settings().report_host},
-    )
+# --- misc ---
 
 
 @app.get("/robots.txt")

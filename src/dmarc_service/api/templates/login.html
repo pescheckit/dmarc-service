@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in — dmarc-service</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 90vh; }
+    form, .sso { display: grid; gap: .8rem; min-width: 20rem; }
+    input, button, a.button { padding: .5rem .7rem; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; text-align: center; text-decoration: none; }
+    .error { color: #c33; font-size: .9rem; }
+    .divider { text-align: center; opacity: .5; font-size: .85rem; margin: .4rem 0; }
+  </style>
+</head>
+<body>
+  <div>
+    <form method="post" action="/login">
+      <h1>dmarc-service</h1>
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+      <input type="email" name="email" placeholder="Email" autofocus required>
+      <input type="password" name="password" placeholder="Password" required>
+      <button type="submit">Log in</button>
+    </form>
+    {% if sso_name %}
+    <div class="sso">
+      <div class="divider">or</div>
+      <a class="button" href="/auth/sso/login">Sign in with {{ sso_name }}</a>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Settings — dmarc-service{% endblock %}
+{% block content %}
+  <h1>Settings</h1>
+
+  <h2>Your API tokens</h2>
+  <p class="muted">Use as <code>Authorization: Bearer &lt;token&gt;</code> on <code>/api/*</code>.
+  Tokens are shown once and stored hashed.</p>
+  {% if new_token %}
+  <p><strong>New token (copy it now, it will not be shown again):</strong><br>
+  <code class="rec">{{ new_token }}</code></p>
+  {% endif %}
+  <table>
+    <thead><tr><th>Name</th><th>Token</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      {% for t in tokens %}
+      <tr>
+        <td>{{ t.name }}</td>
+        <td><code>{{ t.prefix }}…</code></td>
+        <td>{{ t.created_at.strftime("%Y-%m-%d") }}</td>
+        <td>
+          <form class="inline" method="post" action="/settings/tokens/{{ t.id }}/revoke">
+            <button>Revoke</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No tokens yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/settings/tokens" style="margin-top:.6rem">
+    <input type="text" name="name" placeholder="token name (e.g. ci)">
+    <button type="submit">Create token</button>
+  </form>
+
+  {% if user.is_admin %}
+  <h2>Single sign-on (OIDC)</h2>
+  <p class="muted">Works with Azure AD / Entra, Google Workspace, Keycloak, Okta, … —
+  set the redirect URI at your identity provider to <code class="rec">{{ callback_url }}</code>.
+  Users signing in through SSO are created automatically as regular users.</p>
+  {% if sso.configured %}
+  <p>Configured: <strong>{{ sso.name }}</strong> — issuer <code class="rec">{{ sso.issuer }}</code>,
+  client <code>{{ sso.client_id }}</code>
+  <form class="inline" method="post" action="/settings/sso/remove"><button>Remove</button></form></p>
+  {% endif %}
+  <form method="post" action="/settings/sso" style="display:grid; gap:.5rem; max-width:32rem">
+    <input type="text" name="name" placeholder="Button label (e.g. Pescheck SSO)" value="{{ sso.name }}">
+    <input type="text" name="issuer" placeholder="Issuer URL (e.g. https://login.microsoftonline.com/<tenant>/v2.0)" value="{{ sso.issuer }}" required>
+    <input type="text" name="client_id" placeholder="Client ID" value="{{ sso.client_id }}" required>
+    <input type="password" name="client_secret" placeholder="Client secret" required>
+    <button type="submit">{{ "Update SSO" if sso.configured else "Enable SSO" }}</button>
+  </form>
+
+  <h2>Users</h2>
+  <table>
+    <thead><tr><th>Email</th><th>Role</th><th>Login</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.email }}</td>
+        <td>{{ "admin" if u.is_admin else "user" }}</td>
+        <td>{{ "SSO" if u.sso else "password" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+{% endblock %}

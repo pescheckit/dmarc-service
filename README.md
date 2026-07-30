@@ -25,6 +25,10 @@ self-contained alternative:
 - **Nothing silently lost** — unknown recipients, typo'd records, and
   mid-rotation stragglers land in an `unrouted` quarantine tenant instead of
   being bounced.
+- **Self-contained auth** — the first account created in the web UI becomes
+  the admin; the admin can configure OIDC SSO (Azure AD / Entra, Google,
+  Keycloak, Okta, …) through which everyone else signs in, and every user can
+  mint personal API tokens (hashed at rest, shown once) for `/api/*`.
 
 ## Architecture
 
@@ -111,7 +115,8 @@ Everything is an environment variable (see `src/dmarc_service/config.py`):
 | `EXTERNAL_URL` | `http://localhost:8000` | Public base URL (used in TLS-RPT records) |
 | `TENANCY_MODE` | `multi` | `multi` or `single` |
 | `CONTROL_PLANE_ENABLED` | `true` | Disable to freeze tenant/domain provisioning |
-| `API_TOKEN` | *(empty)* | If set, required as `Bearer` on `/api/*` |
+| `API_TOKEN` | *(empty)* | Optional static `Bearer` token for automation |
+| `SESSION_SECRET` | *(empty)* | Cookie-signing key; set it to keep UI sessions across restarts |
 | `INGEST_TOKEN` | *(empty)* | Enables `/api/ingest` for forward-mode edges |
 | `SMTP_MODE` | `direct` | `direct` (store) or `forward` (relay to `/api/ingest`) |
 | `SMTP_FORWARD_URL` / `SMTP_FORWARD_TOKEN` | *(empty)* | Target for forward mode |

@@ -37,7 +37,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/* Whether the chart renders its own Secret */}}
 {{- define "dmarc-service.needsOwnSecret" -}}
-{{- if or .Values.database.url (and (not .Values.auth.existingSecret) (or .Values.auth.apiToken .Values.auth.ingestToken)) -}}true{{- end -}}
+{{- if or .Values.database.url (and (not .Values.auth.existingSecret) (or .Values.auth.apiToken .Values.auth.ingestToken .Values.auth.sessionSecret)) -}}true{{- end -}}
 {{- end -}}
 
 {{/* Environment shared by web, smtp (direct) and migrate */}}
@@ -79,6 +79,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       name: {{ .Values.auth.existingSecret }}
       key: INGEST_TOKEN
       optional: true
+- name: SESSION_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.auth.existingSecret }}
+      key: SESSION_SECRET
+      optional: true
 {{- else }}
 {{- if .Values.auth.apiToken }}
 - name: API_TOKEN
@@ -93,6 +99,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
     secretKeyRef:
       name: {{ include "dmarc-service.fullname" . }}
       key: INGEST_TOKEN
+{{- end }}
+{{- if .Values.auth.sessionSecret }}
+- name: SESSION_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "dmarc-service.fullname" . }}
+      key: SESSION_SECRET
 {{- end }}
 {{- end }}
 {{- end -}}

@@ -34,6 +34,49 @@ class Base(DeclarativeBase):
 UNROUTED_TENANT_SLUG = "unrouted"
 
 
+class User(Base):
+    """UI accounts. The first account created becomes the admin; the admin
+    can configure an SSO provider through which everyone else signs in."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    # Null for SSO-provisioned users (no local password).
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ApiToken(Base):
+    """Personal API tokens, created in the UI, usable as Bearer auth on /api/*.
+    Only a hash is stored; the token itself is shown once at creation."""
+
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    prefix: Mapped[str] = mapped_column(String(12))  # display only
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthProvider(Base):
+    """Single-row OIDC SSO configuration, managed by the admin in the UI."""
+
+    __tablename__ = "auth_providers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), default="SSO")
+    # OIDC issuer base URL; discovery via .well-known/openid-configuration
+    issuer: Mapped[str] = mapped_column(String(500))
+    client_id: Mapped[str] = mapped_column(String(255))
+    client_secret: Mapped[str] = mapped_column(String(255))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Tenant(Base):
     __tablename__ = "tenants"
 

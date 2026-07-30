@@ -24,6 +24,8 @@ class Settings(BaseSettings):
 
     # Auth. Empty string disables the check (e.g. UI/API protected upstream).
     api_token: str = ""
+    # Cookie-signing key; empty = random per process (sessions reset on restart).
+    session_secret: str = ""
     # Token the SMTP edge uses to POST raw messages to /api/ingest.
     # Required for /api/ingest; the endpoint is disabled when empty.
     ingest_token: str = ""

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ domain.name }} — dmarc-service{% endblock %}
+{% block content %}
+  <h1>{{ domain.name }}</h1>
+
+  <h2>DNS records to publish</h2>
+  <p class="muted">Copy these exactly. Records marked <em>operator</em> are published by whoever
+  runs this service ({{ report_host }}); <em>tenant</em> records go in the domain's own zone.</p>
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>Content</th><th>Published by</th></tr></thead>
+    <tbody>
+      {% for r in dns %}
+      <tr>
+        <td><code class="rec">{{ r.name }}</code></td>
+        <td>{{ r.type }}</td>
+        <td><code class="rec">{{ r.content }}</code></td>
+        <td>{{ r.published_by }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Report addresses</h2>
+  <p class="muted">Treat addresses as bearer tokens. During rotation both stay active until
+  the new DNS record has propagated, then deactivate the old one.</p>
+  <table>
+    <thead><tr><th>Address</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for a in addresses %}
+      <tr>
+        <td><code>{{ a.local_part }}@{{ report_host }}</code></td>
+        <td>{{ "active" if a.active else "inactive" }}</td>
+        <td>
+          {% if a.active %}
+          <form class="inline" method="post" action="/domains/{{ domain.name }}/addresses/{{ a.local_part }}/deactivate">
+            <button>Deactivate</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/domains/{{ domain.name }}/addresses/mint" style="margin-top:.6rem">
+    <button>Mint new address (rotation)</button>
+  </form>
+
+  <h2>Recent reports</h2>
+  <table>
+    <thead><tr><th>Reporter</th><th>Period</th><th>Messages</th></tr></thead>
+    <tbody>
+      {% for r in reports %}
+      <tr>
+        <td>{{ r.org_name }}</td>
+        <td>{{ r.date_begin.strftime("%Y-%m-%d") }} → {{ r.date_end.strftime("%Y-%m-%d") }}</td>
+        <td>{{ r.message_count }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">Nothing yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
