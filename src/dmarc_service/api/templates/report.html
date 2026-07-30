@@ -17,28 +17,30 @@
     <table>
       <thead>
         <tr>
-          <th class="nowrap">Source IP / owner</th><th class="num">Messages</th><th>Verdict</th>
-          <th>Disposition</th><th>DKIM</th><th>SPF</th><th class="nowrap">From header</th>
+          <th>Source</th>
+          <th class="num">Messages</th>
+          <th>Verdict</th>
+          <th class="nowrap">DKIM / SPF</th>
+          <th>Disposition</th>
+          <th class="nowrap">From header</th>
           <th>Authenticated as</th>
         </tr>
       </thead>
       <tbody>
         {% for r in records %}
         <tr class="{{ 'rec-bad' if not r.ok }}">
-          <td class="nowrap">
-            <a href="https://ipinfo.io/{{ r.source_ip }}" target="_blank" rel="noopener">{{ r.source_ip }}</a>
+          <td {% if r.ptr %}title="{{ r.ptr }}"{% endif %}>
+            <a class="nowrap" href="https://ipinfo.io/{{ r.source_ip }}" target="_blank" rel="noopener">{{ r.source_ip }}</a>
             {% if r.owner %}<span class="sub">{{ r.owner }}</span>{% endif %}
-            {% if r.ptr %}<span class="sub">{{ r.ptr }}</span>{% endif %}
           </td>
           <td class="num">{{ r.count }}</td>
           <td class="{{ 'ok' if r.ok else 'bad' }}">{{ "pass" if r.ok else "fail" }}</td>
+          <td class="nowrap">{{ r.dkim }} / {{ r.spf }}</td>
           <td>{{ r.disposition }}</td>
-          <td>{{ r.dkim }}</td>
-          <td>{{ r.spf }}</td>
           <td class="nowrap">{{ r.header_from }}</td>
           <td>
-            {{ r.sender_hint or "-" }}
-            <span class="sub">DKIM {{ r.auth_dkim }} | SPF {{ r.auth_spf }}</span>
+            <span class="trunc" title="{{ r.sender_hint }}">{{ r.sender_hint or "-" }}</span>
+            <span class="sub trunc" title="DKIM {{ r.auth_dkim }} | SPF {{ r.auth_spf }}">DKIM {{ r.auth_dkim }} | SPF {{ r.auth_spf }}</span>
           </td>
         </tr>
         {% endfor %}

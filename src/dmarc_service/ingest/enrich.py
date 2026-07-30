@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 RDAP_URL = "https://rdap.org/ip/{ip}"
 LOOKUP_TIMEOUT = 4.0
-MAX_PARALLEL = 8
+# Registries rate-limit bursts; a few at a time resolves everything reliably.
+MAX_PARALLEL = 4
 
 
 def _ptr(ip: str) -> str:
@@ -107,6 +108,11 @@ def enrich_ips(session: Session, ips: list[str], limit: int = 25) -> dict[str, I
 
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
         for result in pool.map(lookup, missing):
+            if not any((result["ptr"], result["netname"], result["org"])):
+                # Registry timeout or rate limit: leave it uncached so the
+                # next view or backfill retries, instead of remembering
+                # "unknown" forever.
+                continue
             row = IpIntel(
                 ip=result["ip"],
                 ptr=result["ptr"],

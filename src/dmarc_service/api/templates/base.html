@@ -55,6 +55,9 @@
     td.actions, th.actions { text-align: right; white-space: nowrap; }
     td.nowrap, th.nowrap { white-space: nowrap; }
     td .sub { display: block; color: var(--ink-2); font-size: .85rem; margin-top: 2px; }
+    /* long PTRs and DKIM domains must not stretch a column off-screen */
+    .trunc { display: block; max-width: 17rem; overflow: hidden;
+             text-overflow: ellipsis; white-space: nowrap; }
 
     /* --- text & status --- */
     .muted { color: var(--ink-2); font-size: .92rem; }
