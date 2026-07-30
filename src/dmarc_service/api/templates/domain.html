@@ -57,21 +57,29 @@
 
   <section class="section">
     <h2>DNS records to publish</h2>
-    <p class="muted">Copy these exactly. Records marked <em>operator</em> are published by whoever
-    runs this service ({{ report_host }}); <em>tenant</em> records go in the domain's own zone.</p>
+    <p class="muted">Copy these exactly, into the zone named in the first column.
+    Most DNS panels append the zone automatically, so enter only the part of the
+    name that comes before it. The verification record belongs to the service
+    operator's zone ({{ report_host }}), not to {{ domain.name }}: it is what
+    lets reports for your domain be delivered to an address in another one.</p>
 
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Name</th><th>Type</th><th>Content</th><th>Published by</th><th>Live check</th></tr>
+          <tr><th>Add to zone</th><th>Name</th><th>Type</th><th>Content</th><th>Live check</th></tr>
         </thead>
         <tbody>
           {% for r in dns %}
           <tr>
-            <td class="nowrap"><code class="rec">{{ r.name }}</code></td>
+            <td class="nowrap">
+              <code class="rec">{{ r.zone }}</code>
+              <span class="sub">{{ "your zone" if r.published_by == "tenant" else "the service operator's zone" }}</span>
+            </td>
+            <td class="nowrap"><code class="rec">{{ r.name }}</code>
+              {% if r.published_by == "operator" %}<span class="sub">not in {{ domain.name }}</span>{% endif %}
+            </td>
             <td>{{ r.type }}</td>
             <td class="wrap"><code class="rec">{{ r.content }}</code></td>
-            <td class="nowrap">{{ r.published_by }}</td>
             <td class="nowrap">
               {% if r.status == "ok" %}<span class="ok">published</span>
               {% elif r.status == "missing" %}<span class="bad">missing</span>
