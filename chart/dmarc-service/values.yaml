@@ -88,6 +88,22 @@ smtp:
     # report mail is opportunistic TLS; plaintext is accepted either way.
     existingSecret: ""
 
+# Nightly database dump to any S3-compatible storage (Wasabi, AWS, Scaleway,
+# MinIO, Backblaze). Aggregate reports cannot be re-fetched, so a lost
+# database is history you cannot recover.
+backup:
+  enabled: false
+  schedule: "20 3 * * *"
+  retentionDays: 30
+  # s3://<access-key>:<secret-key>@<endpoint-host>/<bucket>[/<prefix>]
+  # percent-encode keys containing / or +
+  s3Url: ""
+  # or keep the URL in your own Secret
+  existingSecret: ""
+  secretKey: BACKUP_S3_URL
+  resources: {}
+  extraEnv: []
+
 migrate:
   enabled: true  # pre-install/pre-upgrade Job running schema migrations
 

@@ -37,7 +37,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/* Whether the chart renders its own Secret */}}
 {{- define "dmarc-service.needsOwnSecret" -}}
-{{- if or .Values.database.url (and (not .Values.auth.existingSecret) (or .Values.auth.apiToken .Values.auth.ingestToken .Values.auth.sessionSecret)) -}}true{{- end -}}
+{{- if or .Values.database.url (and .Values.backup.s3Url (not .Values.backup.existingSecret)) (and (not .Values.auth.existingSecret) (or .Values.auth.apiToken .Values.auth.ingestToken .Values.auth.sessionSecret)) -}}true{{- end -}}
 {{- end -}}
 
 {{/* Environment shared by web, smtp (direct) and migrate */}}

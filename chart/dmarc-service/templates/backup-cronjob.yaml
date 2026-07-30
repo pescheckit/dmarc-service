@@ -1,0 +1,73 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "dmarc-service.fullname" . }}-backup
+  labels:
+    {{- include "dmarc-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            {{- include "dmarc-service.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "dmarc-service.serviceAccountName" . }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: backup
+              image: {{ include "dmarc-service.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              args: ["backup"]
+              env:
+                {{- include "dmarc-service.coreEnv" . | nindent 16 }}
+                - name: BACKUP_RETENTION_DAYS
+                  value: {{ .Values.backup.retentionDays | quote }}
+                {{- if .Values.backup.existingSecret }}
+                - name: BACKUP_S3_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.backup.existingSecret }}
+                      key: {{ .Values.backup.secretKey }}
+                {{- else }}
+                - name: BACKUP_S3_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "dmarc-service.fullname" . }}
+                      key: BACKUP_S3_URL
+                {{- end }}
+                {{- with .Values.backup.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+              volumeMounts:
+                {{- include "dmarc-service.dataVolumeMount" . | nindent 16 }}
+          volumes:
+            {{- include "dmarc-service.dataVolume" . | nindent 12 }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
