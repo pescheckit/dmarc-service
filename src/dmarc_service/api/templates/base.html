@@ -13,6 +13,10 @@
     th { font-weight: 600; }
     .muted { opacity: .7; font-size: .9rem; }
     .pill { border: 1px solid #8886; border-radius: 999px; padding: .1rem .6rem; font-size: .85rem; }
+    .ok { color: #1a8f3c; font-weight: 600; }
+    .bad { color: #cc3333; font-weight: 600; }
+    .zero { opacity: .4; font-weight: 400; }
+    tr.rec-bad td { background: #cc333314; }
     nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: baseline; }
     nav a { text-decoration: none; }
     nav .spacer { flex: 1; }
@@ -29,6 +33,7 @@
     <strong>dmarc-service</strong>
     <a href="/">Reports</a>
     <a href="/tenants">Tenants &amp; domains</a>
+    <a href="/docs">API</a>
     <a href="/settings">Settings</a>
     <span class="spacer"></span>
     <span class="muted">{{ report_host }} · {{ user.email }}</span>

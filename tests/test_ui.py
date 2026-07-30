@@ -85,3 +85,29 @@ def test_sso_settings_admin_only(client):
     # login page now offers the SSO button
     client.post("/logout")
     assert "Sign in with Pescheck SSO" in client.get("/login").text
+
+
+def test_report_detail_and_docs(client, aggregate_xml):
+    from tests.test_pipeline import build_report_email
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post(
+        "/api/ingest",
+        content=build_report_email(aggregate_xml, "x@dmarc.reporthost.net"),
+        headers={"Authorization": "Bearer test-ingest-token", "X-Rcpt-To": "x@dmarc.reporthost.net"},
+    )
+    dashboard = client.get("/").text
+    assert "details →" in dashboard
+
+    detail = client.get("/reports/1")
+    assert detail.status_code == 200
+    assert "209.85.220.41" in detail.text          # passing source
+    assert "203.0.113.66" in detail.text           # failing source
+    assert "spammer.example" in detail.text        # authenticated-as hint
+    assert "7 passed" in detail.text and "3 failed" in detail.text
+
+    # API docs behind login
+    assert client.get("/docs").status_code == 200
+    assert "/api/reports" in client.get("/openapi.json").text
+    client.post("/logout")
+    assert client.get("/docs", follow_redirects=False).status_code == 303

@@ -6,19 +6,21 @@
   </p>
   <table>
     <thead>
-      <tr><th>Domain</th><th>Reporter</th><th>Period</th><th>Policy</th><th>Messages</th></tr>
+      <tr><th>Domain</th><th>Reporter</th><th>Period</th><th>Policy</th><th>Pass</th><th>Fail</th><th></th></tr>
     </thead>
     <tbody>
       {% for r in reports %}
       <tr>
-        <td>{{ r.policy_domain }}</td>
+        <td><a href="/domains/{{ r.policy_domain }}">{{ r.policy_domain }}</a></td>
         <td>{{ r.org_name }}</td>
         <td>{{ r.date_begin.strftime("%Y-%m-%d") }} → {{ r.date_end.strftime("%Y-%m-%d") }}</td>
         <td>{{ r.policy_p }}</td>
-        <td>{{ r.message_count }}</td>
+        <td class="ok {{ 'zero' if not r.pass_count }}">{{ r.pass_count }}</td>
+        <td class="bad {{ 'zero' if not r.fail_count }}">{{ r.fail_count }}</td>
+        <td><a href="/reports/{{ r.id }}">details →</a></td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="muted">No reports yet. Add a domain under “Tenants &amp; domains”, publish its DNS records, and wait for the first sender cycle (~24h).</td></tr>
+      <tr><td colspan="7" class="muted">No reports yet. Add a domain under “Tenants &amp; domains”, publish its DNS records, and wait for the first sender cycle (~24h).</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Report {{ report.report_id }} — dmarc-service{% endblock %}
+{% block content %}
+  <h1>{{ report.policy_domain }} <span class="muted">reported by {{ report.org_name }}</span></h1>
+  <p class="muted">
+    {{ report.date_begin.strftime("%Y-%m-%d %H:%M") }} → {{ report.date_end.strftime("%Y-%m-%d %H:%M") }}
+    · policy <code>p={{ report.policy_p }}</code>
+    · <span class="ok">{{ report.pass_count }} passed</span>
+    / <span class="bad {{ 'zero' if not report.fail_count }}">{{ report.fail_count }} failed</span>
+  </p>
+
+  <p class="muted">Each row is a sending source. <strong>Authenticated as</strong> shows which
+  domain the mail actually validated against: your own tools show up there
+  (fix their SPF/DKIM alignment); spoofers show nothing or a foreign domain.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Source IP</th><th>Messages</th><th>Verdict</th><th>Disposition</th>
+        <th>DKIM</th><th>SPF</th><th>From header</th><th>Authenticated as</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr class="{{ 'rec-bad' if not r.ok }}">
+        <td><a href="https://ipinfo.io/{{ r.source_ip }}" target="_blank" rel="noopener">{{ r.source_ip }}</a></td>
+        <td>{{ r.count }}</td>
+        <td class="{{ 'ok' if r.ok else 'bad' }}">{{ "pass" if r.ok else "fail" }}</td>
+        <td>{{ r.disposition }}</td>
+        <td>{{ r.dkim }}</td>
+        <td>{{ r.spf }}</td>
+        <td>{{ r.header_from }}</td>
+        <td>{{ r.sender_hint or "—" }} <span class="muted">{{ r.auth_dkim }} · {{ r.auth_spf }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

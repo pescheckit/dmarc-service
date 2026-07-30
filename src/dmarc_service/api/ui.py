@@ -5,9 +5,10 @@ from pathlib import Path
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
 from dmarc_service.auth import service as auth
 from dmarc_service.config import get_settings
@@ -282,6 +283,62 @@ def deactivate_address_form(request: Request, name: str, local_part: str):
     return RedirectResponse(f"/domains/{name}", status_code=303)
 
 
+# --- API documentation (login-gated Swagger UI) ---
+
+
+@router.get("/openapi.json")
+def openapi_schema(request: Request):
+    with session_scope() as db:
+        if _current_user(request, db) is None:
+            return _login_redirect(db)
+    schema = request.app.openapi()
+    return JSONResponse(schema)
+
+
+@router.get("/docs", response_class=HTMLResponse)
+def api_docs(request: Request):
+    with session_scope() as db:
+        if _current_user(request, db) is None:
+            return _login_redirect(db)
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="dmarc-service API")
+
+
+@router.get("/reports/{report_id}", response_class=HTMLResponse)
+def report_page(request: Request, report_id: int):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        report = db.get(AggregateReport, report_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="report not found")
+        records = []
+        for r in sorted(report.records, key=lambda r: -r.count):
+            ok = r.dkim_result == "pass" or r.spf_result == "pass"
+            # Who actually sent it: the domain that authenticated, if any —
+            # this is what separates "our misconfigured tool" from spoofing.
+            sender_hint = r.auth_dkim_domain or r.auth_spf_domain or r.envelope_from
+            records.append(
+                {
+                    "source_ip": r.source_ip,
+                    "count": r.count,
+                    "ok": ok,
+                    "disposition": r.disposition,
+                    "dkim": r.dkim_result or "-",
+                    "spf": r.spf_result or "-",
+                    "header_from": r.header_from,
+                    "sender_hint": sender_hint,
+                    "auth_dkim": f"{r.auth_dkim_domain}: {r.auth_dkim_result}" if r.auth_dkim_domain else "-",
+                    "auth_spf": f"{r.auth_spf_domain}: {r.auth_spf_result}" if r.auth_spf_domain else "-",
+                }
+            )
+        return templates.TemplateResponse(
+            request,
+            "report.html",
+            _ctx(request, user, report=_report_row(db, report), records=records),
+        )
+
+
 # --- settings: personal API tokens + admin (SSO, users) ---
 
 
@@ -378,9 +435,21 @@ def remove_sso(request: Request):
 
 
 def _report_row(db, report: AggregateReport) -> dict:
-    total = db.scalar(
-        select(func.sum(AggregateRecord.count)).where(AggregateRecord.report_id == report.id)
+    # A message "passes DMARC" when at least one aligned mechanism passed.
+    passed = case(
+        (
+            (AggregateRecord.dkim_result == "pass") | (AggregateRecord.spf_result == "pass"),
+            AggregateRecord.count,
+        ),
+        else_=0,
     )
+    total, ok = db.execute(
+        select(func.sum(AggregateRecord.count), func.sum(passed)).where(
+            AggregateRecord.report_id == report.id
+        )
+    ).one()
+    total = int(total or 0)
+    ok = int(ok or 0)
     return {
         "id": report.id,
         "org_name": report.org_name,
@@ -388,5 +457,7 @@ def _report_row(db, report: AggregateReport) -> dict:
         "date_begin": report.date_begin,
         "date_end": report.date_end,
         "policy_p": report.policy_p,
-        "message_count": int(total or 0),
+        "message_count": total,
+        "pass_count": ok,
+        "fail_count": total - ok,
     }

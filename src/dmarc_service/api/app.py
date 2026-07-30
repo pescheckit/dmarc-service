@@ -30,7 +30,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="dmarc-service", lifespan=lifespan)
+# Docs are re-served behind UI login (see api/ui.py), not exposed publicly.
+app = FastAPI(
+    title="dmarc-service",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 app.add_middleware(
     SessionMiddleware,
     secret_key=get_settings().session_secret or secrets.token_hex(32),
