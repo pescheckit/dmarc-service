@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v9
+      # setup-uv publishes no floating major tag, so pin the exact version.
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           # There is no lock file, so the cache key would never change and the
           # cache would never be invalidated; key it on the dependencies.
