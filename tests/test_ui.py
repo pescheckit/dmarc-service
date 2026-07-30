@@ -140,4 +140,4 @@ def test_dns_check_and_deletion(client, monkeypatch):
     assert client.post("/domains/example.com/delete", follow_redirects=False).status_code == 303
     assert client.get("/domains/example.com").status_code == 404
     assert client.post("/tenants/acme/delete", follow_redirects=False).status_code == 303
-    assert "acme" not in client.get("/tenants").text
+    assert "Acme" not in client.get("/tenants").text
