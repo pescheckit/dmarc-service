@@ -250,3 +250,25 @@ def test_reports_filter_by_tenant_and_domain(client, aggregate_xml):
     # graphs accept the same filters
     assert client.get("/graphs?tenant=acme&days=90").status_code == 200
     assert "tenant=acme" in client.get("/graphs?tenant=acme").text
+
+
+def test_sso_callback_accepts_upn_when_email_claim_missing(client, monkeypatch):
+    """Entra omits the email claim for accounts without a mail attribute."""
+    import dmarc_service.api.ui as ui
+
+    client.post("/setup", data={"email": "admin@b.nl", "password": "longenough"})
+    client.post("/settings/sso", data={"name": "Entra", "issuer": "https://issuer.example",
+                                       "client_id": "abc", "client_secret": "xyz"})
+    client.post("/logout")
+
+    class FakeClient:
+        async def authorize_access_token(self, request):
+            return {"userinfo": {"preferred_username": "New.User@Example.com"}}
+
+    monkeypatch.setattr(ui, "_oauth_client", lambda provider: FakeClient())
+    response = client.get("/auth/sso/callback?code=x&state=y", follow_redirects=False)
+    assert response.status_code == 303
+
+    # provisioned once, normalised to lowercase
+    page = client.get("/settings").text
+    assert "new.user@example.com" in page

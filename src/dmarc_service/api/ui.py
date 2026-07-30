@@ -141,9 +141,17 @@ async def sso_callback(request: Request):
     if provider is None:
         raise HTTPException(status_code=404, detail="SSO not configured")
     token = await _oauth_client(provider).authorize_access_token(request)
-    email = (token.get("userinfo") or {}).get("email")
-    if not email:
-        raise HTTPException(status_code=400, detail="SSO provider returned no email claim")
+    claims = token.get("userinfo") or {}
+    # Entra ID only emits "email" when the account has a mail attribute; for
+    # everyone else the user principal name is the stable identifier.
+    email = (
+        claims.get("email") or claims.get("preferred_username") or claims.get("upn") or ""
+    ).strip().lower()
+    if "@" not in email:
+        raise HTTPException(
+            status_code=400,
+            detail="SSO provider returned no email, preferred_username or upn claim",
+        )
     with session_scope() as db:
         user = auth.find_or_provision_sso_user(db, email)
         request.session["user_id"] = user.id
