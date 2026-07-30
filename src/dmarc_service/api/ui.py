@@ -1,6 +1,7 @@
 """Web UI: first-user setup, password + SSO login, tenants/domains/DNS,
 admin settings (SSO provider, users) and personal API tokens."""
 
+from datetime import UTC
 from pathlib import Path
 
 from authlib.integrations.starlette_client import OAuth
@@ -165,8 +166,17 @@ def index(request: Request):
         unrouted = db.scalar(
             select(func.count(RawMessage.id)).where(RawMessage.status == "unrouted")
         )
+        series = _daily_series(db, "", 30)
+        totals = {
+            "pass": sum(d["pass"] for d in series),
+            "fail": sum(d["fail"] for d in series),
+        }
+        totals["total"] = totals["pass"] + totals["fail"]
+        totals["rate"] = round(100 * totals["pass"] / totals["total"]) if totals["total"] else None
         return templates.TemplateResponse(
-            request, "index.html", _ctx(request, user, reports=rows, unrouted=unrouted)
+            request,
+            "index.html",
+            _ctx(request, user, reports=rows, unrouted=unrouted, totals=totals),
         )
 
 
@@ -337,6 +347,167 @@ def report_page(request: Request, report_id: int):
             request,
             "report.html",
             _ctx(request, user, report=_report_row(db, report), records=records),
+        )
+
+
+# --- graphs & report browsing ---
+
+
+def _pass_case():
+    return case(
+        (
+            (AggregateRecord.dkim_result == "pass") | (AggregateRecord.spf_result == "pass"),
+            AggregateRecord.count,
+        ),
+        else_=0,
+    )
+
+
+def _daily_series(db, domain: str, days: int) -> list[dict]:
+    """Per-day pass/fail message totals, bucketed on the report period start."""
+    from datetime import UTC, datetime, timedelta
+
+    since = datetime.now(UTC) - timedelta(days=days)
+    query = (
+        select(
+            AggregateReport.date_begin,
+            func.sum(AggregateRecord.count),
+            func.sum(_pass_case()),
+        )
+        .join(AggregateRecord)
+        .where(AggregateReport.date_begin >= since)
+        .group_by(AggregateReport.id)
+    )
+    if domain:
+        query = query.where(AggregateReport.policy_domain == domain)
+
+    buckets: dict = {}
+    for begin, total, ok in db.execute(query):
+        day = begin.date()
+        entry = buckets.setdefault(day, {"pass": 0, "fail": 0})
+        entry["pass"] += int(ok or 0)
+        entry["fail"] += int(total or 0) - int(ok or 0)
+
+    start = (datetime.now(UTC) - timedelta(days=days)).date()
+    out = []
+    for offset in range(days + 1):
+        day = start + timedelta(days=offset)
+        entry = buckets.get(day, {"pass": 0, "fail": 0})
+        out.append({"day": day, "pass": entry["pass"], "fail": entry["fail"]})
+    return out
+
+
+def _chart_geometry(series: list[dict], domain: str) -> dict:
+    """Server-rendered stacked-bar geometry. Pass sits on the baseline, fail
+    stacks on top with a 2px surface gap (position + texture carry the
+    distinction for color-blind readers; color is reinforcement)."""
+    width, height, left, bottom, top = 920, 240, 44, 26, 10
+    plot_w, plot_h = width - left - 8, height - bottom - top
+    n = len(series)
+    slot = plot_w / max(n, 1)
+    bar_w = max(slot - 2, 3)
+    peak = max((d["pass"] + d["fail"] for d in series), default=0) or 1
+
+    bars = []
+    for i, d in enumerate(series):
+        x = left + i * slot + 1
+        pass_h = plot_h * d["pass"] / peak
+        fail_h = plot_h * d["fail"] / peak
+        gap = 2 if (pass_h > 0 and fail_h > 0) else 0
+        bars.append(
+            {
+                "x": round(x, 1),
+                "w": round(bar_w, 1),
+                "pass_y": round(top + plot_h - pass_h, 1),
+                "pass_h": round(pass_h, 1),
+                "fail_y": round(top + plot_h - pass_h - gap - fail_h, 1),
+                "fail_h": round(fail_h, 1),
+                "day": d["day"],
+                "pass": d["pass"],
+                "fail": d["fail"],
+                "show_label": i % max(n // 10, 1) == 0,
+                "link": f"/reports?day={d['day'].isoformat()}"
+                + (f"&domain={domain}" if domain else ""),
+            }
+        )
+    return {
+        "width": width,
+        "height": height,
+        "baseline": top + plot_h,
+        "left": left,
+        "top": top,
+        "peak": peak,
+        "mid": peak // 2,
+        "mid_y": round(top + plot_h / 2, 1),
+        "bars": bars,
+    }
+
+
+@router.get("/graphs", response_class=HTMLResponse)
+def graphs_page(request: Request, domain: str = "", days: int = 30):
+    days = 90 if days >= 90 else 30
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        domains = [d.name for d in db.scalars(select(Domain).order_by(Domain.name))]
+        if domain and domain not in domains:
+            domain = ""
+        series = _daily_series(db, domain, days)
+        totals = {
+            "pass": sum(d["pass"] for d in series),
+            "fail": sum(d["fail"] for d in series),
+        }
+        totals["total"] = totals["pass"] + totals["fail"]
+        totals["rate"] = round(100 * totals["pass"] / totals["total"]) if totals["total"] else None
+        return templates.TemplateResponse(
+            request,
+            "graphs.html",
+            _ctx(
+                request,
+                user,
+                chart=_chart_geometry(series, domain),
+                series=[d for d in series if d["pass"] or d["fail"]],
+                totals=totals,
+                domains=domains,
+                domain=domain,
+                days=days,
+            ),
+        )
+
+
+@router.get("/reports", response_class=HTMLResponse)
+def reports_page(request: Request, domain: str = "", day: str = ""):
+    from datetime import date, datetime, time
+
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        query = select(AggregateReport).order_by(AggregateReport.date_end.desc())
+        if domain:
+            query = query.where(AggregateReport.policy_domain == domain.lower())
+        picked = None
+        if day:
+            try:
+                picked = date.fromisoformat(day)
+            except ValueError:
+                picked = None
+        if picked:
+            day_start = datetime.combine(picked, time.min, tzinfo=UTC)
+            day_end = datetime.combine(picked, time.max, tzinfo=UTC)
+            # reports whose period overlaps the picked day
+            query = query.where(
+                AggregateReport.date_begin <= day_end, AggregateReport.date_end >= day_start
+            )
+        reports = db.scalars(query.limit(200)).all()
+        rows = [_report_row(db, r) for r in reports]
+        domains = [d.name for d in db.scalars(select(Domain).order_by(Domain.name))]
+        return templates.TemplateResponse(
+            request,
+            "reports.html",
+            _ctx(request, user, reports=rows, domains=domains, domain=domain,
+                 day=picked.isoformat() if picked else ""),
         )
 
 

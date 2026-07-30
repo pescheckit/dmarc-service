@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Graphs — dmarc-service{% endblock %}
+{% block content %}
+  <h1>Graphs</h1>
+
+  <div class="filters">
+    <div class="seg">
+      <a href="/graphs?days={{ days }}" class="{{ 'active' if not domain }}">All domains</a>
+      {% for d in domains %}
+      <a href="/graphs?domain={{ d }}&days={{ days }}" class="{{ 'active' if domain == d }}">{{ d }}</a>
+      {% endfor %}
+    </div>
+    <div class="seg">
+      <a href="/graphs?domain={{ domain }}&days=30" class="{{ 'active' if days == 30 }}">30 days</a>
+      <a href="/graphs?domain={{ domain }}&days=90" class="{{ 'active' if days == 90 }}">90 days</a>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="stat">{{ totals.total }}</div><div class="muted">messages reported</div></div>
+    <div class="card"><div class="stat ok">{{ totals.pass }}</div><div class="muted">passed DMARC</div></div>
+    <div class="card"><div class="stat {{ 'bad' if totals.fail else 'zero' }}">{{ totals.fail }}</div><div class="muted">failed DMARC</div></div>
+    <div class="card"><div class="stat">{{ totals.rate ~ "%" if totals.rate is not none else "—" }}</div><div class="muted">pass rate</div></div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="legend">
+      <span><svg width="14" height="14"><rect width="14" height="14" rx="3" fill="#0ca30c"/></svg> pass</span>
+      <span><svg width="14" height="14"><rect width="14" height="14" rx="3" fill="#d03b3b"/><rect width="14" height="14" rx="3" fill="url(#hatch-chip)"/></svg> fail</span>
+      <span class="muted">click a day to see its reports</span>
+    </div>
+    <div class="chart-scroll">
+    <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" width="100%" role="img"
+         aria-label="Daily DMARC pass and fail message counts{{ ' for ' ~ domain if domain }}">
+      <defs>
+        <pattern id="hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="5" stroke="#ffffff" stroke-opacity="0.45" stroke-width="2"/>
+        </pattern>
+        <pattern id="hatch-chip" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="5" stroke="#ffffff" stroke-opacity="0.45" stroke-width="2"/>
+        </pattern>
+      </defs>
+      <line x1="{{ chart.left }}" y1="{{ chart.baseline }}" x2="{{ chart.width - 8 }}" y2="{{ chart.baseline }}" class="axis"/>
+      <line x1="{{ chart.left }}" y1="{{ chart.mid_y }}" x2="{{ chart.width - 8 }}" y2="{{ chart.mid_y }}" class="grid"/>
+      <text x="{{ chart.left - 6 }}" y="{{ chart.top + 4 }}" class="tick" text-anchor="end">{{ chart.peak }}</text>
+      <text x="{{ chart.left - 6 }}" y="{{ chart.mid_y + 4 }}" class="tick" text-anchor="end">{{ chart.mid }}</text>
+      {% for b in chart.bars %}
+      <a href="{{ b.link }}">
+        <title>{{ b.day }} — {{ b.pass }} pass, {{ b.fail }} fail</title>
+        <rect x="{{ b.x }}" y="{{ chart.top }}" width="{{ b.w }}" height="{{ chart.baseline - chart.top }}" fill="transparent"/>
+        {% if b.pass_h %}<rect x="{{ b.x }}" y="{{ b.pass_y }}" width="{{ b.w }}" height="{{ b.pass_h }}" rx="2" fill="#0ca30c"/>{% endif %}
+        {% if b.fail_h %}
+        <rect x="{{ b.x }}" y="{{ b.fail_y }}" width="{{ b.w }}" height="{{ b.fail_h }}" rx="2" fill="#d03b3b"/>
+        <rect x="{{ b.x }}" y="{{ b.fail_y }}" width="{{ b.w }}" height="{{ b.fail_h }}" rx="2" fill="url(#hatch)"/>
+        {% endif %}
+        {% if b.show_label %}<text x="{{ b.x + b.w / 2 }}" y="{{ chart.baseline + 16 }}" class="tick" text-anchor="middle">{{ b.day.strftime("%b %d") }}</text>{% endif %}
+      </a>
+      {% endfor %}
+    </svg>
+    </div>
+  </div>
+
+  <details style="margin-top:1rem">
+    <summary class="muted">Daily totals as a table</summary>
+    <table>
+      <thead><tr><th>Day</th><th>Pass</th><th>Fail</th><th></th></tr></thead>
+      <tbody>
+        {% for d in series | reverse %}
+        <tr>
+          <td>{{ d.day }}</td>
+          <td class="ok {{ 'zero' if not d.pass }}">{{ d.pass }}</td>
+          <td class="bad {{ 'zero' if not d.fail }}">{{ d.fail }}</td>
+          <td><a href="/reports?day={{ d.day.isoformat() }}{{ '&domain=' ~ domain if domain }}">reports →</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">No data in this window yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+{% endblock %}

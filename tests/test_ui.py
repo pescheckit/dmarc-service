@@ -141,3 +141,37 @@ def test_dns_check_and_deletion(client, monkeypatch):
     assert client.get("/domains/example.com").status_code == 404
     assert client.post("/tenants/acme/delete", follow_redirects=False).status_code == 303
     assert "Acme" not in client.get("/tenants").text
+
+
+def test_graphs_and_reports_pages(client, aggregate_xml):
+    import gzip as gz
+    from email import policy
+    from email.message import EmailMessage
+
+    client.post("/setup", data={"email": "a@b.nl", "password": "longenough"})
+    client.post("/tenants", data={"slug": "acme", "name": "Acme"})
+
+    # fresh report dated now so it lands in the 30-day window
+    from datetime import UTC, datetime
+    now = int(datetime.now(UTC).timestamp())
+    xml = aggregate_xml.replace(b"<begin>1753142400</begin>", b"<begin>%d</begin>" % (now - 3600))
+    xml = xml.replace(b"<end>1753228799</end>", b"<end>%d</end>" % now)
+
+    message = EmailMessage()
+    message["From"] = "noreply@google.com"
+    message["To"] = "x@dmarc.reporthost.net"
+    message.add_attachment(gz.compress(xml), maintype="application", subtype="gzip",
+                           filename="r.xml.gz")
+    client.post(
+        "/api/ingest", content=message.as_bytes(policy=policy.SMTP),
+        headers={"Authorization": "Bearer test-ingest-token", "X-Rcpt-To": "x@dmarc.reporthost.net"},
+    )
+
+    page = client.get("/graphs").text
+    assert "svg" in page and "pass" in page and "fail" in page
+    assert "/reports?day=" in page  # bars link through
+
+    day = datetime.now(UTC).date().isoformat()
+    listing = client.get(f"/reports?day={day}").text
+    assert "example.com" in listing and "details →" in listing
+    assert "No reports match" in client.get("/reports?day=1999-01-01").text

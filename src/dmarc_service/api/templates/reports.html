@@ -1,13 +1,21 @@
 {% extends "base.html" %}
+{% block title %}Reports — dmarc-service{% endblock %}
 {% block content %}
-  <h1>Latest aggregate reports</h1>
+  <h1>Reports
+    {% if domain %}<span class="muted">for {{ domain }}</span>{% endif %}
+    {% if day %}<span class="muted">on {{ day }}</span>{% endif %}
+  </h1>
 
-  <div class="cards">
-    <div class="card"><a href="/graphs"><div class="stat">{{ totals.total }}</div></a><div class="muted">messages, last 30 days</div></div>
-    <div class="card"><div class="stat {{ 'ok' if totals.pass }}">{{ totals.pass }}</div><div class="muted">passed DMARC</div></div>
-    <div class="card"><div class="stat {{ 'bad' if totals.fail else 'zero' }}">{{ totals.fail }}</div><div class="muted">failed DMARC</div></div>
-    <div class="card"><div class="stat {{ 'bad' if unrouted else 'zero' }}">{{ unrouted }}</div><div class="muted">unrouted in quarantine</div></div>
+  <div class="filters">
+    <div class="seg">
+      <a href="/reports{{ '?day=' ~ day if day }}" class="{{ 'active' if not domain }}">All domains</a>
+      {% for d in domains %}
+      <a href="/reports?domain={{ d }}{{ '&day=' ~ day if day }}" class="{{ 'active' if domain == d }}">{{ d }}</a>
+      {% endfor %}
+    </div>
+    {% if day %}<div class="seg"><a href="/reports{{ '?domain=' ~ domain if domain }}">✕ clear day filter</a></div>{% endif %}
   </div>
+
   <table>
     <thead>
       <tr><th>Domain</th><th>Reporter</th><th>Period</th><th>Policy</th><th>Pass</th><th>Fail</th><th></th></tr>
@@ -24,7 +32,7 @@
         <td><a href="/reports/{{ r.id }}">details →</a></td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="muted">No reports yet. Add a domain under “Tenants &amp; domains”, publish its DNS records, and wait for the first sender cycle (~24h).</td></tr>
+      <tr><td colspan="7" class="muted">No reports match this filter.</td></tr>
       {% endfor %}
     </tbody>
   </table>

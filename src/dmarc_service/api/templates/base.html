@@ -5,41 +5,104 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}dmarc-service{% endblock %}</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 76rem; padding: 0 1rem; }
-    h1 { font-size: 1.4rem; } h2 { font-size: 1.15rem; margin-top: 2rem; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8884; vertical-align: top; }
-    th { font-weight: 600; }
-    .muted { opacity: .7; font-size: .9rem; }
-    .pill { border: 1px solid #8886; border-radius: 999px; padding: .1rem .6rem; font-size: .85rem; }
-    .ok { color: #1a8f3c; font-weight: 600; }
-    .bad { color: #cc3333; font-weight: 600; }
-    .warn { color: #c77d00; font-weight: 600; }
+    :root {
+      color-scheme: light dark;
+      --surface: #fcfcfb; --card: #ffffff; --border: #00000018;
+      --ink: #1c1c1a; --ink-2: #1c1c1aa8;
+      --accent: #3056d3;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --surface: #1a1a19; --card: #222221; --border: #ffffff1c;
+              --ink: #f2f2ef; --ink-2: #f2f2efa0; --accent: #8fa8ff; }
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: var(--surface);
+           color: var(--ink); line-height: 1.45; }
+    main { max-width: 76rem; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
+    h1 { font-size: 1.35rem; margin: 1rem 0 .8rem; }
+    h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; }
+
+    nav { display: flex; gap: .2rem; align-items: center; padding: .55rem 1rem;
+          border-bottom: 1px solid var(--border); background: var(--card);
+          position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+    nav .brand { font-weight: 700; margin-right: .8rem; }
+    nav a { text-decoration: none; color: var(--ink-2); padding: .3rem .65rem;
+            border-radius: 6px; font-size: .95rem; }
+    nav a:hover { color: var(--ink); background: var(--border); }
+    nav a.active { color: var(--ink); background: var(--border); }
+    nav .spacer { flex: 1; }
+
+    table { border-collapse: collapse; width: 100%; background: var(--card);
+            border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    th { font-weight: 600; font-size: .85rem; color: var(--ink-2); text-transform: uppercase; letter-spacing: .03em; }
+    tbody tr:hover td { background: #80808010; }
+
+    .muted { color: var(--ink-2); font-size: .92rem; }
+    .pill { border: 1px solid var(--border); border-radius: 999px; padding: .12rem .65rem; font-size: .85rem; background: var(--card); }
+    .ok { color: #0b7a0b; font-weight: 600; }
+    .bad { color: #c22b2b; font-weight: 600; }
+    .warn { color: #b16f00; font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .ok { color: #4fc35c; } .bad { color: #ff7b6e; } .warn { color: #f0b03f; }
+    }
     .zero { opacity: .4; font-weight: 400; }
     tr.rec-bad td { background: #cc333314; }
-    nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: baseline; }
-    nav a { text-decoration: none; }
-    nav .spacer { flex: 1; }
+    .error { color: #c22b2b; }
+
+    a { color: var(--accent); }
+    td a, .card a { text-decoration: none; }
+    td a:hover { text-decoration: underline; }
+
     form.inline { display: inline; }
-    input[type=text], input[type=password] { padding: .35rem .5rem; border: 1px solid #8886; border-radius: 4px; background: transparent; color: inherit; }
-    button { padding: .35rem .8rem; border: 1px solid #8886; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
-    button:hover { border-color: #888; }
-    code.rec { font-size: .85rem; word-break: break-all; }
-    .error { color: #c33; }
+    input[type=text], input[type=password], input[type=email] {
+      padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 7px;
+      background: var(--card); color: inherit; }
+    button { padding: .4rem .85rem; border: 1px solid var(--border); border-radius: 7px;
+             background: var(--card); color: inherit; cursor: pointer; font-size: .92rem; }
+    button:hover { border-color: var(--ink-2); }
+    code, code.rec { font-size: .85rem; word-break: break-all; background: #80808018;
+                     padding: .1rem .3rem; border-radius: 4px; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+             gap: .8rem; margin: 1rem 0; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+            padding: .9rem 1rem; }
+    .stat { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    .filters { display: flex; gap: .8rem; flex-wrap: wrap; margin: .8rem 0 1rem; }
+    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
+           overflow: hidden; background: var(--card); }
+    .seg a { padding: .35rem .8rem; text-decoration: none; color: var(--ink-2);
+             font-size: .92rem; border-right: 1px solid var(--border); }
+    .seg a:last-child { border-right: none; }
+    .seg a.active { background: var(--border); color: var(--ink); font-weight: 600; }
+
+    .chart-card { padding: 1rem; }
+    .chart-scroll { overflow-x: auto; }
+    .legend { display: flex; gap: 1.2rem; align-items: center; margin-bottom: .6rem; font-size: .92rem; }
+    .legend svg { vertical-align: -2px; margin-right: .3rem; }
+    svg .axis { stroke: var(--ink-2); stroke-width: 1; }
+    svg .grid { stroke: var(--border); stroke-width: 1; }
+    svg .tick { fill: var(--ink-2); font-size: 11px; font-family: system-ui, sans-serif; }
+    svg a rect:hover { opacity: .85; }
   </style>
 </head>
 <body>
   <nav>
-    <strong>dmarc-service</strong>
-    <a href="/">Reports</a>
-    <a href="/tenants">Tenants &amp; domains</a>
+    <span class="brand">dmarc-service</span>
+    <a href="/" class="{{ 'active' if request.url.path == '/' }}">Reports</a>
+    <a href="/graphs" class="{{ 'active' if request.url.path.startswith('/graphs') }}">Graphs</a>
+    <a href="/tenants" class="{{ 'active' if request.url.path.startswith('/tenants') }}">Tenants &amp; domains</a>
     <a href="/docs" target="_blank" rel="noopener">API ↗</a>
-    <a href="/settings">Settings</a>
+    <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}">Settings</a>
     <span class="spacer"></span>
     <span class="muted">{{ report_host }} · {{ user.email }}</span>
     <form class="inline" method="post" action="/logout"><button>Log out</button></form>
   </nav>
+  <main>
   {% block content %}{% endblock %}
+  </main>
 </body>
 </html>

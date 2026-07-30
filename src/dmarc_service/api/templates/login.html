@@ -5,17 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Log in — dmarc-service</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 90vh; }
-    form, .sso { display: grid; gap: .8rem; min-width: 20rem; }
-    input, button, a.button { padding: .5rem .7rem; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; text-align: center; text-decoration: none; }
-    .error { color: #c33; font-size: .9rem; }
-    .divider { text-align: center; opacity: .5; font-size: .85rem; margin: .4rem 0; }
+    :root { color-scheme: light dark;
+      --surface: #fcfcfb; --card: #ffffff; --border: #00000018;
+      --ink: #1c1c1a; --ink-2: #1c1c1aa8; }
+    @media (prefers-color-scheme: dark) {
+      :root { --surface: #1a1a19; --card: #222221; --border: #ffffff1c;
+              --ink: #f2f2ef; --ink-2: #f2f2efa0; } }
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center;
+           min-height: 100vh; margin: 0; background: var(--surface); color: var(--ink); }
+    .box { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+           padding: 2rem; min-width: 21rem; display: grid; gap: .8rem; }
+    h1 { font-size: 1.2rem; margin: 0 0 .4rem; }
+    input, button, a.button { padding: .55rem .75rem; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--surface); color: inherit; text-align: center;
+      text-decoration: none; font-size: 1rem; }
+    input { text-align: left; }
+    button { cursor: pointer; font-weight: 600; }
+    .error { color: #c22b2b; font-size: .9rem; }
+    .divider { text-align: center; color: var(--ink-2); font-size: .85rem; }
   </style>
 </head>
 <body>
-  <div>
-    <form method="post" action="/login">
+  <div class="box">
+    <form method="post" action="/login" style="display:grid; gap:.8rem">
       <h1>dmarc-service</h1>
       {% if error %}<div class="error">{{ error }}</div>{% endif %}
       <input type="email" name="email" placeholder="Email" autofocus required>
@@ -23,10 +35,8 @@
       <button type="submit">Log in</button>
     </form>
     {% if sso_name %}
-    <div class="sso">
-      <div class="divider">or</div>
-      <a class="button" href="/auth/sso/login">Sign in with {{ sso_name }}</a>
-    </div>
+    <div class="divider">or</div>
+    <a class="button" href="/auth/sso/login">Sign in with {{ sso_name }}</a>
     {% endif %}
   </div>
 </body>

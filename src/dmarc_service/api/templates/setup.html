@@ -5,19 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Setup — dmarc-service</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 90vh; }
-    form { display: grid; gap: .8rem; min-width: 20rem; }
-    input, button { padding: .5rem .7rem; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; }
-    .muted { opacity: .7; font-size: .9rem; }
-    .error { color: #c33; font-size: .9rem; }
+    :root { color-scheme: light dark;
+      --surface: #fcfcfb; --card: #ffffff; --border: #00000018;
+      --ink: #1c1c1a; --ink-2: #1c1c1aa8; }
+    @media (prefers-color-scheme: dark) {
+      :root { --surface: #1a1a19; --card: #222221; --border: #ffffff1c;
+              --ink: #f2f2ef; --ink-2: #f2f2efa0; } }
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center;
+           min-height: 100vh; margin: 0; background: var(--surface); color: var(--ink); }
+    form { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+           padding: 2rem; min-width: 22rem; max-width: 26rem; display: grid; gap: .8rem; }
+    h1 { font-size: 1.2rem; margin: 0; }
+    p { margin: 0; color: var(--ink-2); font-size: .92rem; }
+    input, button { padding: .55rem .75rem; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--surface); color: inherit; font-size: 1rem; }
+    button { cursor: pointer; font-weight: 600; }
+    .error { color: #c22b2b; font-size: .9rem; }
   </style>
 </head>
 <body>
   <form method="post" action="/setup">
     <h1>Welcome to dmarc-service</h1>
-    <p class="muted">Create the first account. It becomes the administrator,
-    which can configure SSO and manage everything else from the UI.</p>
+    <p>Create the first account. It becomes the administrator, which can
+    configure SSO and manage everything else from the UI.</p>
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
     <input type="email" name="email" placeholder="you@example.com" autofocus required>
     <input type="password" name="password" placeholder="Password (min 8 chars)" minlength="8" required>
