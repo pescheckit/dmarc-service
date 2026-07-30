@@ -17,7 +17,7 @@
     <table>
       <thead>
         <tr>
-          <th class="nowrap">Source IP</th><th class="num">Messages</th><th>Verdict</th>
+          <th class="nowrap">Source IP / owner</th><th class="num">Messages</th><th>Verdict</th>
           <th>Disposition</th><th>DKIM</th><th>SPF</th><th class="nowrap">From header</th>
           <th>Authenticated as</th>
         </tr>
@@ -25,7 +25,11 @@
       <tbody>
         {% for r in records %}
         <tr class="{{ 'rec-bad' if not r.ok }}">
-          <td class="nowrap"><a href="https://ipinfo.io/{{ r.source_ip }}" target="_blank" rel="noopener">{{ r.source_ip }}</a></td>
+          <td class="nowrap">
+            <a href="https://ipinfo.io/{{ r.source_ip }}" target="_blank" rel="noopener">{{ r.source_ip }}</a>
+            {% if r.owner %}<span class="sub">{{ r.owner }}</span>{% endif %}
+            {% if r.ptr %}<span class="sub">{{ r.ptr }}</span>{% endif %}
+          </td>
           <td class="num">{{ r.count }}</td>
           <td class="{{ 'ok' if r.ok else 'bad' }}">{{ "pass" if r.ok else "fail" }}</td>
           <td>{{ r.disposition }}</td>

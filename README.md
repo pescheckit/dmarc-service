@@ -55,6 +55,11 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
   domain. Click any day to drill into that day's reports, then into a single
   report. Server-rendered SVG - no JS bundle - with a table fallback and
   color-blind-safe encoding (position + texture, not color alone).
+- **Sending IP identification**: each source IP is resolved to the organisation
+  that owns the network (via reverse DNS and RDAP, no API keys) and cached in
+  the database, so a row reads "Twilio SendGrid" or "Microsoft" rather than a
+  bare address. The reporter is not the sender: mail reported by Google may
+  have been sent by anyone. Backfill older data with `dmarc-service enrich`.
 - **Per-report detail**: every sending source with its IP, message count,
   DKIM/SPF results, disposition, and - the useful part - the domain the mail
   actually **authenticated as**, which separates your own misconfigured tools

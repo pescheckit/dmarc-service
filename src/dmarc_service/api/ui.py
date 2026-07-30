@@ -337,6 +337,9 @@ def report_page(request: Request, report_id: int):
         report = db.get(AggregateReport, report_id)
         if report is None:
             raise HTTPException(status_code=404, detail="report not found")
+        from dmarc_service.ingest import enrich
+
+        intel = enrich.enrich_ips(db, [r.source_ip for r in report.records])
         records = []
         for r in sorted(report.records, key=lambda r: -r.count):
             ok = r.dkim_result == "pass" or r.spf_result == "pass"
@@ -346,6 +349,8 @@ def report_page(request: Request, report_id: int):
             records.append(
                 {
                     "source_ip": r.source_ip,
+                    "owner": enrich.describe(intel.get(r.source_ip)),
+                    "ptr": (intel.get(r.source_ip).ptr if intel.get(r.source_ip) else ""),
                     "count": r.count,
                     "ok": ok,
                     "disposition": r.disposition,

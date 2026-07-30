@@ -10,6 +10,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("web", help="run the API/UI web server")
     sub.add_parser("smtp", help="run the SMTP report receiver")
     sub.add_parser("migrate", help="create/upgrade the database schema")
+    sub.add_parser("enrich", help="resolve owners for source IPs seen in reports")
     args = parser.parse_args(argv)
 
     if args.command == "web":
@@ -29,6 +30,12 @@ def main(argv: list[str] | None = None) -> None:
         from dmarc_service.db.migrate import upgrade
 
         upgrade()
+    elif args.command == "enrich":
+        from dmarc_service.db.session import session_scope
+        from dmarc_service.ingest.enrich import backfill
+
+        with session_scope() as db:
+            print(f"resolved {backfill(db)} IP(s)")
     else:  # pragma: no cover
         sys.exit(2)
 

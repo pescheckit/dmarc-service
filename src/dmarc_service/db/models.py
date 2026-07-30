@@ -62,6 +62,24 @@ class ApiToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class IpIntel(Base):
+    """Cached identity of a sending IP: who owns the network it lives in.
+
+    The report tells you Google *reported* the mail; this tells you whether
+    the machine that sent it belongs to Google, Twilio/SendGrid, Microsoft,
+    or a residential ISP. Looked up once per IP and reused across reports.
+    """
+
+    __tablename__ = "ip_intel"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ip: Mapped[str] = mapped_column(String(45), unique=True, index=True)
+    ptr: Mapped[str] = mapped_column(String(253), default="")
+    netname: Mapped[str] = mapped_column(String(128), default="")
+    org: Mapped[str] = mapped_column(String(255), default="")
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class AuthProvider(Base):
     """Single-row OIDC SSO configuration, managed by the admin in the UI."""
 
