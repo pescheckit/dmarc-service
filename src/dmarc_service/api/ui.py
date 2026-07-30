@@ -13,6 +13,7 @@ from dmarc_service.auth import service as auth
 from dmarc_service.config import get_settings
 from dmarc_service.control_plane import service as control_plane
 from dmarc_service.db.models import (
+    UNROUTED_TENANT_SLUG,
     AggregateRecord,
     AggregateReport,
     ApiToken,
@@ -193,7 +194,15 @@ def tenants_page(request: Request, error: str = ""):
                         "dns_total": len(checks),
                     }
                 )
-            tenants.append({"slug": tenant.slug, "name": tenant.name, "domains": domains})
+            tenants.append(
+                {
+                    "slug": tenant.slug,
+                    "name": tenant.name,
+                    "domains": domains,
+                    # the quarantine pseudo-tenant never owns domains directly
+                    "system": tenant.slug == UNROUTED_TENANT_SLUG,
+                }
+            )
         return templates.TemplateResponse(
             request,
             "tenants.html",
@@ -228,6 +237,10 @@ def add_domain_form(request: Request, slug: str, name: str = Form(...)):
         tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
         if tenant is None:
             raise HTTPException(status_code=404, detail="tenant not found")
+        if tenant.slug == UNROUTED_TENANT_SLUG:
+            return RedirectResponse(
+                "/tenants?error=the+quarantine+cannot+own+domains", status_code=303
+            )
         if db.scalar(select(Domain).where(Domain.name == name.lower().strip("."))):
             return RedirectResponse("/tenants?error=domain+exists", status_code=303)
         domain = control_plane.add_domain(db, tenant, name)
@@ -349,6 +362,8 @@ def delete_tenant_form(request: Request, slug: str):
         tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
         if tenant is None:
             raise HTTPException(status_code=404, detail="tenant not found")
+        if tenant.slug == UNROUTED_TENANT_SLUG:
+            raise HTTPException(status_code=400, detail="the quarantine tenant is built-in")
         if not control_plane.delete_tenant(db, tenant):
             return RedirectResponse(
                 "/tenants?error=delete+the+tenant%27s+domains+first", status_code=303
