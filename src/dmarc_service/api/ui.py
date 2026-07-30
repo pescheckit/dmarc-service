@@ -675,6 +675,7 @@ def settings_page(request: Request):
                 {
                     "email": u.email,
                     "is_admin": u.is_admin,
+                    "is_self": u.id == user.id,
                     # what the account can sign in with today, not how it was made
                     "methods": ", ".join(
                         filter(None, [
@@ -686,6 +687,7 @@ def settings_page(request: Request):
                 for u in db.scalars(select(User).order_by(User.email))
             ]
         new_token = request.session.pop("new_token", None)
+        settings_error = request.session.pop("settings_error", "")
         return templates.TemplateResponse(
             request,
             "settings.html",
@@ -694,6 +696,7 @@ def settings_page(request: Request):
                 user,
                 tokens=tokens,
                 new_token=new_token,
+                settings_error=settings_error,
                 users=users,
                 sso={
                     "configured": provider is not None,
@@ -723,6 +726,23 @@ def revoke_token(request: Request, token_id: int):
         if user is None:
             return _login_redirect(db)
         auth.revoke_api_token(db, user, token_id)
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/users/{email}/role")
+def change_role(request: Request, email: str, make_admin: str = Form("")):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        if not user.is_admin:
+            raise HTTPException(status_code=403, detail="admin only")
+        target = db.scalar(select(User).where(User.email == email.lower()))
+        if target is None:
+            raise HTTPException(status_code=404, detail="user not found")
+        problem = auth.set_admin(db, target, make_admin == "1")
+        if problem:
+            request.session["settings_error"] = problem
     return RedirectResponse("/settings", status_code=303)
 
 

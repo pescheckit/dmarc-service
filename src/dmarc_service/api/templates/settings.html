@@ -77,15 +77,26 @@
 
   <section class="section">
     <h2>Users</h2>
+    <p class="muted">Administrators can manage SSO, roles and every tenant.
+    Anyone who signs in through SSO is added here automatically as a user.</p>
+    {% if settings_error %}<p class="error">{{ settings_error }}</p>{% endif %}
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Email</th><th>Role</th><th>Can sign in with</th></tr></thead>
+        <thead><tr><th>Email</th><th>Role</th><th>Can sign in with</th><th class="actions"></th></tr></thead>
         <tbody>
           {% for u in users %}
           <tr>
-            <td>{{ u.email }}</td>
+            <td>{{ u.email }}{% if u.is_self %} <span class="muted">(you)</span>{% endif %}</td>
             <td>{{ "admin" if u.is_admin else "user" }}</td>
             <td>{{ u.methods }}</td>
+            <td class="actions">
+              <form class="inline" method="post" action="/settings/users/{{ u.email }}/role">
+                <input type="hidden" name="make_admin" value="{{ '0' if u.is_admin else '1' }}">
+                <button {% if u.is_admin %}class="danger"{% endif %}>
+                  {{ "Remove admin" if u.is_admin else "Make admin" }}
+                </button>
+              </form>
+            </td>
           </tr>
           {% endfor %}
         </tbody>

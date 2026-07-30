@@ -57,6 +57,25 @@ def find_or_provision_sso_user(session: Session, email: str) -> User:
     return user
 
 
+def admin_count(session: Session) -> int:
+    return session.scalar(select(func.count(User.id)).where(User.is_admin.is_(True))) or 0
+
+
+def set_admin(session: Session, user: User, is_admin: bool) -> str:
+    """Promote or demote a user. Returns "" on success, else why not.
+
+    The last administrator cannot be demoted: an installation without one
+    could no longer manage SSO or roles at all.
+    """
+    if user.is_admin == is_admin:
+        return ""
+    if not is_admin and admin_count(session) <= 1:
+        return "the last administrator cannot be demoted"
+    user.is_admin = is_admin
+    session.flush()
+    return ""
+
+
 def get_provider(session: Session) -> AuthProvider | None:
     return session.scalar(select(AuthProvider).where(AuthProvider.enabled.is_(True)))
 

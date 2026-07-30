@@ -272,3 +272,55 @@ def test_sso_callback_accepts_upn_when_email_claim_missing(client, monkeypatch):
     # provisioned once, normalised to lowercase
     page = client.get("/settings").text
     assert "new.user@example.com" in page
+
+
+def _add_sso_user(client, email):
+    """Sign a second identity in through SSO to create a regular user."""
+
+    class FakeClient:
+        async def authorize_access_token(self, request):
+            return {"userinfo": {"email": email}}
+
+    return FakeClient
+
+
+def test_admin_can_promote_and_demote(client, monkeypatch):
+    import dmarc_service.api.ui as ui
+
+    client.post("/setup", data={"email": "admin@b.nl", "password": "longenough"})
+    client.post("/settings/sso", data={"name": "Entra", "issuer": "https://issuer.example",
+                                       "client_id": "abc", "client_secret": "xyz"})
+    monkeypatch.setattr(ui, "_oauth_client", lambda p: _add_sso_user(client, "colleague@b.nl")())
+    client.get("/auth/sso/callback?code=x&state=y")  # colleague signs in, becomes a user
+    client.post("/logout")
+    client.post("/login", data={"email": "admin@b.nl", "password": "longenough"})
+
+    page = client.get("/settings").text
+    assert "colleague@b.nl" in page and "Make admin" in page
+
+    client.post("/settings/users/colleague@b.nl/role", data={"make_admin": "1"})
+    assert client.get("/settings").text.count("Remove admin") == 2  # both are admins now
+
+    client.post("/settings/users/colleague@b.nl/role", data={"make_admin": "0"})
+    assert client.get("/settings").text.count("Remove admin") == 1
+
+
+def test_last_admin_cannot_be_demoted(client):
+    client.post("/setup", data={"email": "admin@b.nl", "password": "longenough"})
+    # the redirect is followed, so the flash appears in this response
+    page = client.post("/settings/users/admin@b.nl/role", data={"make_admin": "0"}).text
+    assert "last administrator cannot be demoted" in page
+    assert "Remove admin" in page  # still an admin
+
+
+def test_non_admin_cannot_change_roles(client, monkeypatch):
+    import dmarc_service.api.ui as ui
+
+    client.post("/setup", data={"email": "admin@b.nl", "password": "longenough"})
+    client.post("/settings/sso", data={"name": "Entra", "issuer": "https://issuer.example",
+                                       "client_id": "abc", "client_secret": "xyz"})
+    client.post("/logout")
+    monkeypatch.setattr(ui, "_oauth_client", lambda p: _add_sso_user(client, "colleague@b.nl")())
+    client.get("/auth/sso/callback?code=x&state=y")  # now signed in as the regular user
+    response = client.post("/settings/users/colleague@b.nl/role", data={"make_admin": "1"})
+    assert response.status_code == 403
