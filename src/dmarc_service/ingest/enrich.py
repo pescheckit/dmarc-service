@@ -61,7 +61,10 @@ def _rdap(ip: str) -> tuple[str, str]:
     # network is registered to, and prefer organisations over the individual
     # admins some registries expose, so an IP reads "Microsoft" not the name
     # of whoever happens to be the technical contact.
-    role_rank = {"registrant": 0, "administrative": 1, "technical": 2, "abuse": 3}
+    # Abuse contacts are never the owner ("Abuse-C Role" and friends), so
+    # they rank below everything, as do role objects and individuals.
+    role_rank = {"registrant": 0, "administrative": 1, "technical": 2, "abuse": 30}
+    role_words = ("role", "abuse", "noc", "hostmaster", "postmaster", "registry")
     best_score, org = 99, ""
     for entity in data.get("entities", []) or []:
         vcard = entity.get("vcardArray")
@@ -78,8 +81,14 @@ def _rdap(ip: str) -> tuple[str, str]:
         score = min((role_rank.get(r, 8) for r in entity.get("roles") or []), default=8)
         if kind == "individual":
             score += 10  # a person is a last resort
+        if any(word in name.lower() for word in role_words):
+            score += 20  # a contact role, not the organisation
         if score < best_score:
             best_score, org = score, name
+
+    # Nothing but contact objects: the network name identifies the owner better
+    if best_score >= 20:
+        org = ""
     return netname, org
 
 

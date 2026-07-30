@@ -63,3 +63,22 @@ def test_describe_falls_back(db, monkeypatch):
     intel = enrich.enrich_ips(db, ["203.0.113.7"])["203.0.113.7"]
     assert enrich.describe(intel) == "NETNAME"
     assert enrich.describe(None) == ""
+
+
+def test_abuse_contacts_are_not_treated_as_owners(monkeypatch):
+    payload = {
+        "name": "NL-EXAMPLE-NET",
+        "entities": [
+            {"roles": ["abuse"],
+             "vcardArray": ["vcard", [["fn", {}, "text", "Abuse-C Role"]]]},
+        ],
+    }
+
+    class FakeResponse:
+        def raise_for_status(self): pass
+        def json(self): return payload
+
+    monkeypatch.setattr(enrich.httpx, "get", lambda *a, **k: FakeResponse())
+    netname, org = enrich._rdap("203.0.113.1")
+    assert netname == "NL-EXAMPLE-NET"
+    assert org == ""  # falls back to the network name in the UI
