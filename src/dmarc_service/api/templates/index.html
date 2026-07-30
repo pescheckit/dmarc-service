@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Latest aggregate reports</h1>
+  <h1>Overview</h1>
 
   <div class="cards">
     <div class="card"><a href="/graphs"><div class="stat">{{ totals.total }}</div></a><div class="muted">messages, last 30 days</div></div>
@@ -9,6 +9,7 @@
     <div class="card"><div class="stat {{ 'bad' if unrouted else 'zero' }}">{{ unrouted }}</div><div class="muted">unrouted in quarantine</div></div>
   </div>
 
+  <h2>Latest reports</h2>
   <div class="table-wrap">
     <table>
       <thead>
@@ -33,5 +34,8 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+  <div class="row-actions">
+    <a href="/reports">See all reports, filtered by tenant, domain or day -></a>
   </div>
 {% endblock %}

@@ -14,7 +14,7 @@ def test_setup_creates_admin_and_logs_in(client):
     )
     assert response.status_code == 303
     # session cookie set; dashboard now renders
-    assert "Latest aggregate reports" in client.get("/").text
+    assert "Overview" in client.get("/").text
     # setup is one-shot: second attempt bounces to login
     response = client.post(
         "/setup", data={"email": "evil@example.com", "password": "hackhackhack"},

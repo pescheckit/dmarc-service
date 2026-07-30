@@ -160,7 +160,7 @@ def index(request: Request):
         if user is None:
             return _login_redirect(db)
         reports = db.scalars(
-            select(AggregateReport).order_by(AggregateReport.date_end.desc()).limit(50)
+            select(AggregateReport).order_by(AggregateReport.date_end.desc()).limit(10)
         ).all()
         rows = [_report_row(db, r) for r in reports]
         unrouted = db.scalar(

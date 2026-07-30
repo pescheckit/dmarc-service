@@ -145,7 +145,8 @@
 <body>
   <nav>
     <span class="brand">dmarc-service</span>
-    <a href="/" class="{{ 'active' if request.url.path == '/' }}">Reports</a>
+    <a href="/" class="{{ 'active' if request.url.path == '/' }}">Overview</a>
+    <a href="/reports" class="{{ 'active' if request.url.path.startswith('/reports') }}">Reports</a>
     <a href="/graphs" class="{{ 'active' if request.url.path.startswith('/graphs') }}">Graphs</a>
     <a href="/upload" class="{{ 'active' if request.url.path.startswith('/upload') }}">Upload</a>
     <a href="/tenants" class="{{ 'active' if request.url.path.startswith('/tenants') }}">Tenants &amp; domains</a>
