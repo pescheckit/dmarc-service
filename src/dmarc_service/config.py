@@ -30,6 +30,20 @@ class Settings(BaseSettings):
     # Required for /api/ingest; the endpoint is disabled when empty.
     ingest_token: str = ""
 
+    # IMAP intake (optional). The default path is receiving mail directly on
+    # port 25; poll a mailbox instead when that is impossible, or to import
+    # reports that already collect somewhere.
+    imap_host: str = ""
+    imap_port: int = 993
+    imap_ssl: bool = True
+    imap_starttls: bool = False
+    imap_username: str = ""
+    imap_password: str = ""
+    imap_folder: str = "INBOX"
+    # Where to move processed mail; empty leaves it in place, marked read.
+    imap_processed_folder: str = ""
+    imap_poll_interval: int = 300
+
     # Backups. One URL holds everything needed:
     #   s3://<access-key>:<secret-key>@<endpoint-host>/<bucket>[/<prefix>]
     # e.g. s3://KEY:SECRET@s3.eu-central-1.wasabisys.com/dmarc-backups/prod

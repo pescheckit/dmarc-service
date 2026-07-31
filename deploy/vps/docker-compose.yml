@@ -68,6 +68,25 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Alternative intake for hosts that cannot accept inbound port 25: poll a
+  # mailbox instead. Start it with: docker compose --profile imap up -d
+  imap:
+    image: ${IMAGE:-ghcr.io/pescheckit/dmarc-service:latest}
+    command: ["imap"]
+    restart: unless-stopped
+    profiles: ["imap"]
+    environment:
+      <<: *app_env
+      IMAP_HOST: ${IMAP_HOST:-}
+      IMAP_USERNAME: ${IMAP_USERNAME:-}
+      IMAP_PASSWORD: ${IMAP_PASSWORD:-}
+      IMAP_FOLDER: ${IMAP_FOLDER:-INBOX}
+      IMAP_PROCESSED_FOLDER: ${IMAP_PROCESSED_FOLDER:-}
+      IMAP_POLL_INTERVAL: ${IMAP_POLL_INTERVAL:-300}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

@@ -9,6 +9,8 @@ def main(argv: list[str] | None = None) -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("web", help="run the API/UI web server")
     sub.add_parser("smtp", help="run the SMTP report receiver")
+    imap = sub.add_parser("imap", help="fetch reports from an IMAP mailbox")
+    imap.add_argument("--once", action="store_true", help="fetch and exit")
     sub.add_parser("migrate", help="create/upgrade the database schema")
     sub.add_parser("enrich", help="resolve owners for source IPs seen in reports")
     sub.add_parser("backup", help="dump the database to S3-compatible storage")
@@ -40,6 +42,13 @@ def main(argv: list[str] | None = None) -> None:
         from dmarc_service.smtp.server import run
 
         run()
+    elif args.command == "imap":
+        from dmarc_service.ingest.imap import fetch_once, run
+
+        if args.once:
+            print(fetch_once())
+        else:
+            run()
     elif args.command == "migrate":
         from dmarc_service.db.migrate import upgrade
         from dmarc_service.db.session import session_scope

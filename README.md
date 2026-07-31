@@ -21,6 +21,10 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 - Parses DMARC aggregate XML and TLS-RPT JSON, plain, gzipped or zipped.
 - Deliberate intake rules for report mail: accepts from anyone, no greylisting,
   50 MB default ceiling, duplicate reports ignored - see *Intake rules* below.
+- **IMAP intake** as an alternative to receiving mail: poll an existing mailbox
+  when the host cannot accept inbound port 25, or to pick up reports that have
+  been collecting somewhere for months. Routing, deduplication and quarantine
+  behave exactly as they do for received mail.
 - **Direct or forward mode**: store locally, or run the same image as a
   stateless edge that relays messages over authenticated HTTPS to your main
   instance - for clouds that block inbound port 25 (DigitalOcean, for example).
@@ -52,6 +56,13 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
   retention window. Configured with a single URL:
   `BACKUP_S3_URL=s3://<key>:<secret>@<endpoint-host>/<bucket>[/<prefix>]`.
   Aggregate reports cannot be re-fetched, so a lost database is lost history.
+
+**Keeping what arrives**
+- Every message is stored verbatim, so `dmarc-service reprocess` can replay
+  anything that produced no report after a parser fix or a routing correction.
+  It runs automatically on every deploy, because senders never resend.
+- Reports already held are recognised as duplicates rather than treated as
+  failures, so forwarded copies and sender retries are harmless.
 
 **Manual import**
 - Upload page (and `POST /upload`) for importing report files by hand: `.zip`,
@@ -181,6 +192,9 @@ Every setting is an environment variable (see `src/dmarc_service/config.py`):
 | `SMTP_FORWARD_URL` / `SMTP_FORWARD_TOKEN` | *(empty)* | Target for forward mode |
 | `SMTP_TLS_CERT` / `SMTP_TLS_KEY` | *(empty)* | Offer STARTTLS when set |
 | `SMTP_MAX_MESSAGE_BYTES` | `52428800` | Inbound message size ceiling |
+| `IMAP_HOST` / `IMAP_USERNAME` / `IMAP_PASSWORD` | *(empty)* | Poll a mailbox instead of receiving mail |
+| `IMAP_FOLDER` / `IMAP_PROCESSED_FOLDER` | `INBOX` / *(empty)* | Where to read, and where to file what is processed |
+| `IMAP_POLL_INTERVAL` | `300` | Seconds between polls |
 | `BACKUP_S3_URL` | *(empty)* | `s3://key:secret@endpoint/bucket[/prefix]`; empty disables backups |
 | `BACKUP_RETENTION_DAYS` | `30` | Delete backups older than this (0 keeps everything) |
 

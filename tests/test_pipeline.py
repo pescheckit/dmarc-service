@@ -145,3 +145,25 @@ def test_reprocess_is_idempotent(db, aggregate_xml):
     second = pipeline.reprocess(db)
     assert first["recovered"] == 0 and second["recovered"] == 0
     assert len(db.scalars(select(AggregateReport)).all()) == 1
+
+
+def test_migrations_run_on_an_empty_database(tmp_path, monkeypatch):
+    """A fresh install must migrate cleanly: the first revision once created
+    every table the models had at the time, so later revisions collided."""
+    from dmarc_service.config import get_settings
+    from dmarc_service.db.migrate import upgrade
+    from dmarc_service.db.session import get_engine, reset_engine
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/fresh.db")
+    get_settings.cache_clear()
+    reset_engine()
+
+    upgrade()  # must not raise
+
+    from sqlalchemy import inspect
+    tables = set(inspect(get_engine()).get_table_names())
+    assert {"tenants", "domains", "report_addresses", "aggregate_reports",
+            "users", "api_tokens", "ip_intel"} <= tables
+
+    get_settings.cache_clear()
+    reset_engine()
