@@ -138,13 +138,34 @@ class DnsRecord:
     retired_markers: tuple[str, ...] = ()
 
 
+def delivery_address(session: Session) -> str:
+    """The address reports must be sent to, when it is not the minted one.
+
+    A mailbox polled over IMAP that is not a catch-all for the report host can
+    only receive its own address, so every domain has to publish that instead
+    of its own. Returns "" when per-domain addresses work normally.
+    """
+    from dmarc_service.db.models import ImapAccount
+
+    row = session.scalar(
+        select(ImapAccount)
+        .where(ImapAccount.enabled.is_(True), ImapAccount.catch_all.is_(False))
+        .order_by(ImapAccount.id)
+    )
+    return row.username if row else ""
+
+
 def required_dns_records(session: Session, domain: Domain) -> list[DnsRecord]:
     settings = get_settings()
     report_host = settings.report_host
     addresses = active_addresses(session, domain)
-    mailtos = ",".join(f"mailto:{a.local_part}@{report_host}" for a in addresses)
+    shared = delivery_address(session)
+    if shared:
+        mailtos = f"mailto:{shared}"
+    else:
+        mailtos = ",".join(f"mailto:{a.local_part}@{report_host}" for a in addresses)
 
-    any_mailto = f"@{report_host}"
+    any_mailto = f"@{shared.split('@')[-1]}" if shared else f"@{report_host}"
     retired = tuple(
         f"{a.local_part}@{report_host}"
         for a in domain.addresses

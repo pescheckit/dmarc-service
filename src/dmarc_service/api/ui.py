@@ -19,6 +19,7 @@ from dmarc_service.db.models import (
     AggregateReport,
     ApiToken,
     Domain,
+    ImapAccount,
     RawMessage,
     Tenant,
     User,
@@ -801,6 +802,20 @@ def settings_page(request: Request, page: int = 1):
             return _login_redirect(db)
         if not user.is_admin:
             return RedirectResponse("/profile", status_code=303)
+        mailboxes = [
+            {
+                "id": row.id,
+                "host": row.host,
+                "username": row.username,
+                "folder": row.folder,
+                "catch_all": row.catch_all,
+                "enabled": row.enabled,
+                "last_polled_at": row.last_polled_at,
+                "last_result": row.last_result,
+            }
+            for row in db.scalars(select(ImapAccount).order_by(ImapAccount.id))
+        ]
+
         provider = auth.get_provider(db)
         users = []
         pages = None
@@ -833,6 +848,7 @@ def settings_page(request: Request, page: int = 1):
                 user,
                 settings_error=settings_error,
                 settings_notice=settings_notice,
+                mailboxes=mailboxes,
                 users=users,
                 pages=pages,
                 sso={
@@ -902,6 +918,72 @@ def change_role(request: Request, email: str, make_admin: str = Form("")):
         problem = auth.set_admin(db, target, make_admin == "1")
         if problem:
             request.session["settings_error"] = problem
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/mailboxes")
+def add_mailbox(
+    request: Request,
+    host: str = Form(...),
+    port: int = Form(993),
+    username: str = Form(...),
+    password: str = Form(...),
+    folder: str = Form("INBOX"),
+    processed_folder: str = Form(""),
+    use_ssl: str = Form("on"),
+    catch_all: str = Form(""),
+):
+    """Add a mailbox to poll. Credentials are verified before being stored, so
+    a typo is caught here rather than silently never fetching anything."""
+    from dmarc_service.auth.crypto import encrypt
+    from dmarc_service.ingest import imap as imap_module
+
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        if not user.is_admin:
+            raise HTTPException(status_code=403, detail="admin only")
+
+        account = imap_module.Account(
+            host, port, use_ssl == "on", username, password, folder, processed_folder
+        )
+        try:
+            problem = imap_module.check(account)
+        except Exception as exc:  # noqa: BLE001 - report why it would not connect
+            problem = str(exc)[:200]
+        if problem:
+            request.session["settings_error"] = f"could not sign in to {host}: {problem}"
+            return RedirectResponse("/settings", status_code=303)
+
+        db.add(
+            ImapAccount(
+                host=host,
+                port=port,
+                use_ssl=use_ssl == "on",
+                username=username,
+                password_encrypted=encrypt(password),
+                folder=folder,
+                processed_folder=processed_folder,
+                catch_all=catch_all == "on",
+                enabled=True,
+            )
+        )
+        request.session["settings_notice"] = f"{username} added; it will be polled from now on"
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/mailboxes/{mailbox_id}/delete")
+def delete_mailbox(request: Request, mailbox_id: int):
+    with session_scope() as db:
+        user = _current_user(request, db)
+        if user is None:
+            return _login_redirect(db)
+        if not user.is_admin:
+            raise HTTPException(status_code=403, detail="admin only")
+        row = db.get(ImapAccount, mailbox_id)
+        if row is not None:
+            db.delete(row)
     return RedirectResponse("/settings", status_code=303)
 
 

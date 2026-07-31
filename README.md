@@ -21,10 +21,16 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
 - Parses DMARC aggregate XML and TLS-RPT JSON, plain, gzipped or zipped.
 - Deliberate intake rules for report mail: accepts from anyone, no greylisting,
   50 MB default ceiling, duplicate reports ignored - see *Intake rules* below.
-- **IMAP intake** as an alternative to receiving mail: poll an existing mailbox
-  when the host cannot accept inbound port 25, or to pick up reports that have
-  been collecting somewhere for months. Routing, deduplication and quarantine
-  behave exactly as they do for received mail.
+- **IMAP intake** as an alternative to receiving mail: poll one or more
+  mailboxes when the host cannot accept inbound port 25, or to pick up reports
+  that have been collecting somewhere for months. Mailboxes are added in the UI
+  (credentials verified before they are saved, password encrypted at rest) or
+  set through the environment. A mailbox that is not a catch-all for the report
+  host becomes the address every domain is told to publish, so the generated
+  DNS always matches where reports actually land. Because every domain has its own address, one
+  catch-all mailbox serves all tenants; a single shared address works too, with
+  each report attributed by the domain named inside it. Routing, deduplication
+  and quarantine behave exactly as they do for received mail.
 - **Direct or forward mode**: store locally, or run the same image as a
   stateless edge that relays messages over authenticated HTTPS to your main
   instance - for clouds that block inbound port 25 (DigitalOcean, for example).
@@ -192,7 +198,8 @@ Every setting is an environment variable (see `src/dmarc_service/config.py`):
 | `SMTP_FORWARD_URL` / `SMTP_FORWARD_TOKEN` | *(empty)* | Target for forward mode |
 | `SMTP_TLS_CERT` / `SMTP_TLS_KEY` | *(empty)* | Offer STARTTLS when set |
 | `SMTP_MAX_MESSAGE_BYTES` | `52428800` | Inbound message size ceiling |
-| `IMAP_HOST` / `IMAP_USERNAME` / `IMAP_PASSWORD` | *(empty)* | Poll a mailbox instead of receiving mail |
+| `CREDENTIALS_KEY` | *(session secret)* | Encrypts mailbox passwords stored in the database |
+| `IMAP_HOST` / `IMAP_USERNAME` / `IMAP_PASSWORD` | *(empty)* | Poll a mailbox without configuring one in the UI |
 | `IMAP_FOLDER` / `IMAP_PROCESSED_FOLDER` | `INBOX` / *(empty)* | Where to read, and where to file what is processed |
 | `IMAP_POLL_INTERVAL` | `300` | Seconds between polls |
 | `BACKUP_S3_URL` | *(empty)* | `s3://key:secret@endpoint/bucket[/prefix]`; empty disables backups |

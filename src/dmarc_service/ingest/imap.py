@@ -41,30 +41,110 @@ def _recipient(message) -> str:
     return ""
 
 
-def _connect(settings):
-    factory = imaplib.IMAP4_SSL if settings.imap_ssl else imaplib.IMAP4
-    client = factory(settings.imap_host, settings.imap_port)
-    if not settings.imap_ssl and settings.imap_starttls:
-        client.starttls()
-    client.login(settings.imap_username, settings.imap_password)
+class Account:
+    """One mailbox to poll, from the database or the environment."""
+
+    def __init__(self, host, port, use_ssl, username, password, folder,
+                 processed_folder, row=None):
+        self.host, self.port, self.use_ssl = host, port, use_ssl
+        self.username, self.password = username, password
+        self.folder, self.processed_folder = folder, processed_folder
+        self.row = row  # the database row, when it came from there
+
+    @classmethod
+    def from_row(cls, row):
+        from dmarc_service.auth.crypto import decrypt
+
+        return cls(row.host, row.port, row.use_ssl, row.username,
+                   decrypt(row.password_encrypted), row.folder,
+                   row.processed_folder, row=row)
+
+    @classmethod
+    def from_settings(cls, settings):
+        return cls(settings.imap_host, settings.imap_port, settings.imap_ssl,
+                   settings.imap_username, settings.imap_password,
+                   settings.imap_folder, settings.imap_processed_folder)
+
+
+def accounts(session, settings=None) -> list:
+    """Mailboxes configured in the UI, plus the environment one if set."""
+    from sqlalchemy import select
+
+    from dmarc_service.db.models import ImapAccount
+
+    settings = settings or get_settings()
+    found = [
+        Account.from_row(row)
+        for row in session.scalars(
+            select(ImapAccount).where(ImapAccount.enabled.is_(True)).order_by(ImapAccount.id)
+        )
+    ]
+    if settings.imap_host:
+        found.append(Account.from_settings(settings))
+    return found
+
+
+def _connect(account):
+    factory = imaplib.IMAP4_SSL if account.use_ssl else imaplib.IMAP4
+    client = factory(account.host, account.port)
+    client.login(account.username, account.password)
     return client
 
 
-def fetch_once(settings=None) -> dict:
-    """Process unread messages in the configured folder.
+def fetch_all(settings=None) -> dict:
+    """Poll every configured mailbox. Returns combined counts."""
+    from dmarc_service.db.models import utcnow
 
-    Returns counts. Messages are marked read (and moved, when a destination
-    folder is configured) only after they have been stored, so a crash means
-    the message is retried rather than lost.
-    """
     settings = settings or get_settings()
-    if not settings.imap_host:
-        raise SystemExit("IMAP_HOST is not set")
+    totals = {"seen": 0, "stored": 0, "failed": 0, "mailboxes": 0}
+    with session_scope() as db:
+        configured = accounts(db, settings)
 
-    counts = {"seen": 0, "stored": 0, "failed": 0}
-    client = _connect(settings)
+    for account in configured:
+        totals["mailboxes"] += 1
+        try:
+            counts = fetch_once(account)
+            result = f"{counts['stored']} stored, {counts['failed']} failed"
+        except Exception as exc:  # noqa: BLE001 - one bad mailbox must not stop the rest
+            logger.exception("polling %s failed", account.host)
+            counts, result = {"seen": 0, "stored": 0, "failed": 0}, str(exc)[:255]
+        for key in ("seen", "stored", "failed"):
+            totals[key] += counts[key]
+
+        if account.row is not None:
+            with session_scope() as db:
+                from dmarc_service.db.models import ImapAccount
+
+                row = db.get(ImapAccount, account.row.id)
+                if row is not None:
+                    row.last_polled_at, row.last_result = utcnow(), result
+    return totals
+
+
+def check(account) -> str:
+    """Verify credentials without processing anything."""
+    client = _connect(account)
     try:
-        client.select(settings.imap_folder)
+        status, _ = client.select(account.folder, readonly=True)
+        return "" if status == "OK" else f"cannot open folder {account.folder}"
+    finally:
+        try:
+            client.close()
+        except Exception:  # noqa: BLE001
+            pass
+        client.logout()
+
+
+def fetch_once(account) -> dict:
+    """Process unread messages in one mailbox.
+
+    Messages are acknowledged only after they have been stored, so a crash
+    means the message is retried rather than lost.
+    """
+    counts = {"seen": 0, "stored": 0, "failed": 0}
+    client = _connect(account)
+    try:
+        client.select(account.folder)
         status, data = client.search(None, "UNSEEN")
         if status != "OK":
             return counts
@@ -93,11 +173,11 @@ def fetch_once(settings=None) -> dict:
             # fetching it again forever. Only an exception leaves it unread.
             counts["stored" if ok else "failed"] += 1
             client.store(number, "+FLAGS", "\\Seen")
-            if ok and settings.imap_processed_folder:
-                client.copy(number, settings.imap_processed_folder)
+            if ok and account.processed_folder:
+                client.copy(number, account.processed_folder)
                 client.store(number, "+FLAGS", "\\Deleted")
 
-        if settings.imap_processed_folder:
+        if account.processed_folder:
             client.expunge()
     finally:
         try:
@@ -115,18 +195,15 @@ def _sender(message) -> str:
 
 
 def run() -> None:
-    """Poll the mailbox until stopped."""
+    """Poll every configured mailbox until stopped."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     settings = get_settings()
-    logger.info(
-        "polling %s@%s every %ss",
-        settings.imap_username, settings.imap_host, settings.imap_poll_interval,
-    )
+    logger.info("polling configured mailboxes every %ss", settings.imap_poll_interval)
     while True:
         try:
-            counts = fetch_once(settings)
+            counts = fetch_all(settings)
             if counts["seen"]:
                 logger.info("processed %s", counts)
-        except Exception:  # noqa: BLE001 - a mailbox outage must not end the loop
+        except Exception:  # noqa: BLE001 - an outage must not end the loop
             logger.exception("IMAP poll failed; retrying")
         time.sleep(settings.imap_poll_interval)

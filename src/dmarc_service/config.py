@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Required for /api/ingest; the endpoint is disabled when empty.
     ingest_token: str = ""
 
+    # Key for secrets stored in the database (mailbox passwords). Falls back
+    # to session_secret; keep it out of the database itself.
+    credentials_key: str = ""
+
     # IMAP intake (optional). The default path is receiving mail directly on
     # port 25; poll a mailbox instead when that is impossible, or to import
     # reports that already collect somewhere.

@@ -133,12 +133,15 @@ def _store_aggregate(
         logger.info("duplicate aggregate report %s/%s", parsed.org_name, parsed.report_id)
         return False
 
-    # If routing didn't pin a domain (unrouted), still try to attach by the
-    # published policy domain so quarantined data stays queryable.
+    # Routing by recipient did not pin a domain: fall back to the policy
+    # domain named inside the report. This is the normal path when every
+    # domain's rua points at one shared mailbox, so take that domain's tenant
+    # too rather than leaving the report filed under the quarantine.
     if domain_id is None and parsed.policy_domain:
         domain = session.scalar(select(Domain).where(Domain.name == parsed.policy_domain))
         if domain is not None:
             domain_id = domain.id
+            tenant_id = domain.tenant_id
 
     report = AggregateReport(
         tenant_id=tenant_id,
@@ -197,8 +200,7 @@ def _store_tlsrpt(
         domain = session.scalar(select(Domain).where(Domain.name == parsed.policy_domains[0]))
         if domain is not None:
             domain_id = domain.id
-            if tenant_id is None:
-                tenant_id = domain.tenant_id
+            tenant_id = domain.tenant_id
 
     session.add(
         TlsReport(

@@ -5,7 +5,66 @@
   <h1>Settings</h1>
   <p class="muted">Administration. Your own password and API tokens live under <a href="/profile">your profile</a>.</p>
 
-    <section class="section" style="margin-top:0">
+  {% if settings_notice %}<p class="ok">{{ settings_notice }}</p>{% endif %}
+  {% if settings_error %}<p class="error">{{ settings_error }}</p>{% endif %}
+
+  <section class="section" style="margin-top:0">
+    <h2>Mailboxes to poll</h2>
+    <p class="muted">Receiving reports directly on port 25 needs no credentials
+    and stays the default. Add a mailbox here when that is impossible, or to
+    pick up reports that already collect somewhere. Each domain keeps its own
+    address, so one catch-all mailbox serves every tenant; a single shared
+    address works too, with reports attributed by the domain named inside them.
+    Passwords are encrypted before being stored.</p>
+
+    {% if mailboxes %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Mailbox</th><th>Folder</th><th class="nowrap">Last poll</th><th class="actions"></th></tr></thead>
+        <tbody>
+          {% for m in mailboxes %}
+          <tr>
+            <td><code class="rec">{{ m.username }}</code><span class="sub">{{ m.host }}</span></td>
+            <td class="nowrap">{{ m.folder }}
+              {% if not m.catch_all %}<span class="sub">single address; all domains publish it</span>{% endif %}
+            </td>
+            <td class="nowrap">
+              {% if m.last_polled_at %}{{ m.last_polled_at.strftime("%Y-%m-%d %H:%M") }}
+                <span class="sub">{{ m.last_result }}</span>
+              {% else %}<span class="muted">not polled yet</span>{% endif %}
+            </td>
+            <td class="actions">
+              <form class="inline" method="post" action="/settings/mailboxes/{{ m.id }}/delete"
+                    onsubmit="return confirm('Stop polling {{ m.username }}?')">
+                <button class="danger">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/settings/mailboxes" style="display:grid; gap:.5rem; max-width:34rem; margin-top:var(--s3)">
+      <input type="text" name="host" placeholder="IMAP server, e.g. imap.gmail.com" required>
+      <input type="text" name="username" placeholder="mailbox address" required>
+      <input type="password" name="password" placeholder="password or app password" required>
+      <input type="text" name="folder" placeholder="folder to read (INBOX)" value="INBOX">
+      <input type="text" name="processed_folder" placeholder="move processed mail here (optional)">
+      <label class="muted">
+        <input type="checkbox" name="catch_all" checked>
+        This mailbox receives every address at {{ report_host }}
+      </label>
+      <p class="muted">Leave it ticked for a catch-all: each domain keeps its own
+      report address, which is what makes routing and rotation work. Untick it for
+      one ordinary mailbox, and every domain will be told to publish that mailbox
+      address instead, with reports attributed by the domain named inside them.</p>
+      <div><button type="submit">Add mailbox</button></div>
+    </form>
+  </section>
+
+  <section class="section">
     <h2>Single sign-on (OIDC)</h2>
     <p class="muted">Works with Azure AD / Entra, Google Workspace, Keycloak, Okta, ... -
     set the redirect URI at your identity provider to <code class="rec">{{ callback_url }}</code>.

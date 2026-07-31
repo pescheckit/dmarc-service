@@ -113,9 +113,20 @@ exactly once, alongside the password form. Administration stays in Settings.
 Receiving mail directly is the default: the service mints an address and the
 domain owner points `rua` at it, so no credentials exist anywhere. When inbound
 port 25 is impossible, or reports have been collecting in a mailbox for months,
-`dmarc-service imap` polls that mailbox instead. Because each domain has its own
-address, one catch-all mailbox still routes every domain correctly, and
-deduplication and quarantine behave exactly as they do for received mail.
+mailboxes can be added in Settings and `dmarc-service imap` polls them.
+
+Credentials are checked before they are saved, so a typo is caught at the form
+rather than by silence, and the password is encrypted with a key that lives
+outside the database. Each mailbox shows when it was last polled and what came
+of it.
+
+Because each domain has its own address, one catch-all mailbox routes every
+domain correctly, and the DNS records keep naming each domain's own address. A
+single ordinary mailbox works too: mark it as not a catch-all and every domain
+is told to publish that one address instead, with reports attributed by the
+policy domain named inside them, tenant included. Either way the records the
+service generates match where reports actually land. Deduplication and
+quarantine behave exactly as they do for received mail.
 
 ## Backups
 

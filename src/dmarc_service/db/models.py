@@ -80,6 +80,37 @@ class IpIntel(Base):
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ImapAccount(Base):
+    """A mailbox to poll for reports, configured in the UI.
+
+    Receiving mail directly needs no credentials at all and stays the default;
+    this exists for hosts that cannot accept inbound port 25. The password is
+    encrypted with a key derived from CREDENTIALS_KEY (or SESSION_SECRET), so
+    a database dump alone does not expose mailbox access.
+    """
+
+    __tablename__ = "imap_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    host: Mapped[str] = mapped_column(String(253))
+    port: Mapped[int] = mapped_column(Integer, default=993)
+    use_ssl: Mapped[bool] = mapped_column(Boolean, default=True)
+    username: Mapped[str] = mapped_column(String(320))
+    password_encrypted: Mapped[str] = mapped_column(Text)
+    folder: Mapped[str] = mapped_column(String(255), default="INBOX")
+    processed_folder: Mapped[str] = mapped_column(String(255), default="")
+    # True when the mailbox receives every address at the report host, so each
+    # domain keeps its own address. False for a single ordinary mailbox: then
+    # every domain must publish that one address instead.
+    catch_all: Mapped[bool] = mapped_column(Boolean, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_polled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_result: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class AuthProvider(Base):
     """Single-row OIDC SSO configuration, managed by the admin in the UI."""
 

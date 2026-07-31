@@ -15,6 +15,7 @@ def settings_env(tmp_path, monkeypatch):
     monkeypatch.setenv("TENANCY_MODE", "multi")
     monkeypatch.setenv("INGEST_TOKEN", "test-ingest-token")
     monkeypatch.setenv("API_TOKEN", "")
+    monkeypatch.setenv("CREDENTIALS_KEY", "test-credentials-key")
 
     from dmarc_service.config import get_settings
     from dmarc_service.control_plane.service import clear_dns_cache

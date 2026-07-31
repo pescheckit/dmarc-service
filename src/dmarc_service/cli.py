@@ -43,10 +43,10 @@ def main(argv: list[str] | None = None) -> None:
 
         run()
     elif args.command == "imap":
-        from dmarc_service.ingest.imap import fetch_once, run
+        from dmarc_service.ingest.imap import fetch_all, run
 
         if args.once:
-            print(fetch_once())
+            print(fetch_all())
         else:
             run()
     elif args.command == "migrate":

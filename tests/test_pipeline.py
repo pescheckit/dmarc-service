@@ -167,3 +167,26 @@ def test_migrations_run_on_an_empty_database(tmp_path, monkeypatch):
 
     get_settings.cache_clear()
     reset_engine()
+
+
+def test_shared_mailbox_reports_land_with_the_right_tenant(db, aggregate_xml):
+    """One mailbox for every domain: the recipient tells us nothing, so the
+    report is attributed by the policy domain named inside it - including its
+    tenant, not the quarantine."""
+    from dmarc_service.db.models import Tenant
+
+    tenant = control_plane.create_tenant(db, "acme", "Acme")
+    control_plane.add_domain(db, tenant, "example.com")
+
+    rcpt = "dmarc@shared-mailbox.example"  # matches no minted address
+    raw = process_message(db, build_report_email(aggregate_xml, rcpt), rcpt_to=rcpt)
+
+    report = db.scalar(select(AggregateReport))
+    assert report.policy_domain == "example.com"
+    assert report.tenant_id == tenant.id      # not the quarantine tenant
+    assert report.domain_id is not None
+    # the message itself is still marked unrouted, which is honest: nothing
+    # claimed that recipient
+    assert raw.status == "unrouted"
+    quarantine = db.scalar(select(Tenant).where(Tenant.slug == "unrouted"))
+    assert report.tenant_id != quarantine.id

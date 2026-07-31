@@ -129,3 +129,28 @@ def test_dns_naming_a_retired_address_is_not_published(db, monkeypatch):
     statuses = {r["name"]: r["status"] for r in
                 cp.check_dns_records(cp.required_dns_records(db, domain))}
     assert statuses["_dmarc.example.com"] == "ok"
+
+
+def test_a_single_mailbox_becomes_the_published_address(db):
+    """A polled mailbox that is not a catch-all can only receive its own
+    address, so every domain must publish that instead of a minted one."""
+    from dmarc_service.control_plane import service as cp
+    from dmarc_service.db.models import ImapAccount
+
+    tenant = cp.create_tenant(db, "acme", "Acme")
+    domain = cp.add_domain(db, tenant, "example.com")
+    minted = cp.active_addresses(db, domain)[0].local_part
+
+    records = {r.name: r.content for r in cp.required_dns_records(db, domain)}
+    assert minted in records["_dmarc.example.com"]  # per-domain address by default
+
+    db.add(ImapAccount(host="imap.example.net", port=993, use_ssl=True,
+                       username="dmarc@company.example", password_encrypted="x",
+                       folder="INBOX", processed_folder="", catch_all=False,
+                       enabled=True))
+    db.flush()
+
+    records = {r.name: r.content for r in cp.required_dns_records(db, domain)}
+    assert "mailto:dmarc@company.example" in records["_dmarc.example.com"]
+    assert minted not in records["_dmarc.example.com"]
+    assert "mailto:dmarc@company.example" in records["_smtp._tls.example.com"]
