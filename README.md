@@ -122,6 +122,16 @@ Helm chart. No SaaS, no per-domain pricing, your data stays yours.
   for automation.
 - Full JSON API with interactive docs at `/docs`.
 
+**Operations**
+- **Prometheus metrics** on a separate port, off by default, and refusing to
+  start without a token: the labels name your tenants and domains and say
+  which of them have no working DMARC record. Includes the two gauges nothing
+  else exposes - when each domain was last reported on, and how much of the
+  ten-lookup SPF budget it uses. See *Metrics* below.
+- **Nightly backups** to any S3-compatible storage, with retention pruning.
+  Aggregate reports cannot be re-requested from senders, so an unbacked
+  database is history that cannot be recovered.
+
 ## Architecture
 
 ```

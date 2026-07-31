@@ -128,6 +128,41 @@ policy domain named inside them, tenant included. Either way the records the
 service generates match where reports actually land. Deduplication and
 quarantine behave exactly as they do for received mail.
 
+## Monitoring
+
+Prometheus metrics are served on a port of their own, never on the web port,
+and only when asked for. Enabling them without a token stops the process
+rather than publishing quietly: the labels name every tenant and domain on the
+instance, say which of them currently have no working DMARC record, and say
+which are close to the SPF lookup limit, which together is a target list for
+spoofing your tenants. `METRICS_LABELS=false` publishes only totals, for a
+Prometheus shared more widely than the data.
+
+Two of the gauges answer questions the interface cannot.
+`dmarc_last_report_timestamp_seconds` says when each domain was last reported
+on: senders report daily, so silence means reports are being lost, and a
+screen that shows what arrived cannot show you what did not.
+`dmarc_dns_record_ok` says whether the records are still published, which
+catches a zone edit that dropped the `rua` or a rotation left half finished.
+Alongside those: `dmarc_spf_lookups` against the ten RFC 7208 permits,
+message counts by DMARC verdict and disposition, quarantine depth, IMAP poll
+health, and `dmarc_collector_up` for when metrics are being served but the
+database cannot be read.
+
+Source IP is deliberately never a label. A busy domain sees tens of thousands
+of them, and that one label would take down the Prometheus it was pointed at.
+
+DNS and SPF checks run on a timer in the background, so a scrape reads the
+last result and never waits on a lookup, and the scrape interval cannot decide
+how hard the service queries other people's nameservers.
+
+The Helm chart adds a ClusterIP Service for the metrics port alone (never
+extra ports on the SMTP LoadBalancer, which would publish the tenant list on
+the same public IP that receives mail), plus optional `ServiceMonitor`,
+`PrometheusRule` and `NetworkPolicy` objects. The shipped alerts cover stale
+reports, a DNS record that stopped resolving, SPF nearing the limit, a mailbox
+that can no longer be polled, and a database that cannot be read.
+
 ## Backups
 
 `dmarc-service backup` dumps the database, uploads it to any S3-compatible
