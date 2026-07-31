@@ -322,6 +322,215 @@
       }
     },
     {
+      "id": 11,
+      "type": "stat",
+      "title": "Messages reported",
+      "description": "Counted since the database was created, not a rolling window - the app's own screens show the 30-day view.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum(dmarc_messages_reported_total)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Passed DMARC",
+      "description": "Counted since the database was created, not a rolling window - the app's own screens show the 30-day view.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum(dmarc_messages_reported_total{result=\"pass\"})",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Failed DMARC",
+      "description": "Counted since the database was created, not a rolling window - the app's own screens show the 30-day view.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum(dmarc_messages_reported_total{result=\"fail\"})",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Pass rate",
+      "description": "Forwarding breaks DKIM, so a healthy domain sits below 100. A sharp drop is the signal, not the absolute number.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum(dmarc_messages_reported_total{result=\"pass\"}) / sum(dmarc_messages_reported_total) * 100",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 97
+              }
+            ]
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
       "id": 6,
       "type": "bargauge",
       "title": "Hours since last report, per domain",
@@ -330,7 +539,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -392,7 +601,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 4
+        "y": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -453,7 +662,7 @@
         "h": 9,
         "w": 16,
         "x": 0,
-        "y": 13
+        "y": 17
       },
       "datasource": {
         "type": "prometheus",
@@ -539,7 +748,7 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 13
+        "y": 17
       },
       "datasource": {
         "type": "prometheus",
@@ -589,7 +798,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 26
       },
       "datasource": {
         "type": "prometheus",
