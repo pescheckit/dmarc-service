@@ -1,0 +1,37 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "dmarc-service.fullname" . }}
+  {{- if .Values.metrics.serviceMonitor.namespace }}
+  namespace: {{ .Values.metrics.serviceMonitor.namespace }}
+  {{- end }}
+  labels:
+    {{- include "dmarc-service.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "dmarc-service.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: metrics
+  {{- if .Values.metrics.serviceMonitor.namespace }}
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  {{- end }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      {{- if or .Values.metrics.token .Values.metrics.existingSecret }}
+      {{- /* The operator reads this Secret from the ServiceMonitor's own
+             namespace and needs RBAC for it. A 401 with no other clue is
+             almost always that permission missing. */}}
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ .Values.metrics.existingSecret | default (include "dmarc-service.fullname" .) }}
+          key: {{ .Values.metrics.secretKey }}
+      {{- end }}
+{{- end }}

@@ -35,8 +35,10 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+            {{- include "dmarc-service.metricsPort" . | nindent 12 }}
           env:
             {{- include "dmarc-service.coreEnv" . | nindent 12 }}
+            {{- include "dmarc-service.metricsEnv" . | nindent 12 }}
             {{- with .Values.web.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

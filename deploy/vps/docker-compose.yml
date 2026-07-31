@@ -32,6 +32,9 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       BACKUP_S3_URL: ${BACKUP_S3_URL:-}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      METRICS_ENABLED: ${METRICS_ENABLED:-false}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      METRICS_LABELS: ${METRICS_LABELS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,6 +50,11 @@ services:
       timeout: 3s
       retries: 6
       start_period: 20s
+    ports:
+      # Metrics on the loopback interface only: they name your tenants and
+      # domains, so Caddy never sees this port and neither does the
+      # internet. A local Prometheus agent or pushprox client scrapes here.
+      - "127.0.0.1:9100:9100"
     depends_on:
       migrate:
         condition: service_completed_successfully

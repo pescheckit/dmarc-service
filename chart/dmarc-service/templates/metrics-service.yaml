@@ -1,0 +1,26 @@
+{{- if .Values.metrics.enabled }}
+{{- /*
+A Service of its own, deliberately not extra ports on the web or smtp
+Services. The smtp Service is usually type=LoadBalancer, and adding the
+metrics port there would publish your tenant list on the same public IP that
+receives mail. This one is always ClusterIP.
+
+The selector omits the component label so one Service covers web and smtp;
+pods without a port named "metrics" are simply left out of the endpoints.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmarc-service.fullname" . }}-metrics
+  labels:
+    {{- include "dmarc-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "dmarc-service.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+{{- end }}

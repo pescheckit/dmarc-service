@@ -1,0 +1,38 @@
+{{- if and .Values.metrics.enabled .Values.metrics.networkPolicy.enabled }}
+{{- /*
+The control that still holds when the token leaks or an Ingress is
+misconfigured: nothing outside the namespaces named here can open the
+metrics port at all.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "dmarc-service.fullname" . }}-metrics
+  labels:
+    {{- include "dmarc-service.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "dmarc-service.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    # NetworkPolicy is allow-list only: selecting these pods for Ingress
+    # denies everything not named here, so the app's own ports have to be
+    # allowed back or the service stops answering.
+    - ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 2525
+    - from:
+        - namespaceSelector:
+            {{- if .Values.metrics.networkPolicy.namespaceSelector }}
+            {{- toYaml .Values.metrics.networkPolicy.namespaceSelector | nindent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+{{- end }}

@@ -35,6 +35,9 @@ spec:
           ports:
             - name: smtp
               containerPort: 2525
+            {{- if eq .Values.smtp.mode "direct" }}
+            {{- include "dmarc-service.metricsPort" . | nindent 12 }}
+            {{- end }}
           env:
             - name: SMTP_MODE
               value: {{ .Values.smtp.mode | quote }}
@@ -58,6 +61,9 @@ spec:
             {{- end }}
             {{- else }}
             {{- include "dmarc-service.coreEnv" . | nindent 12 }}
+            {{- /* forward mode never touches the database, so it has
+                   nothing to report and serves no metrics */}}
+            {{- include "dmarc-service.metricsEnv" . | nindent 12 }}
             {{- end }}
             {{- if .Values.smtp.tls.existingSecret }}
             - name: SMTP_TLS_CERT

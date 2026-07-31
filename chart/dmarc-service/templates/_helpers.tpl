@@ -37,7 +37,45 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/* Whether the chart renders its own Secret */}}
 {{- define "dmarc-service.needsOwnSecret" -}}
-{{- if or .Values.database.url (and .Values.backup.s3Url (not .Values.backup.existingSecret)) (and (not .Values.auth.existingSecret) (or .Values.auth.apiToken .Values.auth.ingestToken .Values.auth.sessionSecret)) -}}true{{- end -}}
+{{- if or .Values.database.url (and .Values.backup.s3Url (not .Values.backup.existingSecret)) (and .Values.metrics.token (not .Values.metrics.existingSecret)) (and (not .Values.auth.existingSecret) (or .Values.auth.apiToken .Values.auth.ingestToken .Values.auth.sessionSecret)) -}}true{{- end -}}
+{{- end -}}
+
+{{/* Metrics environment, shared by every process that serves them.
+
+Enabling metrics without a token stops the install rather than publishing
+the tenant list; allowUnauthenticated is the deliberate way past it. */}}
+{{- define "dmarc-service.metricsEnv" -}}
+{{- if .Values.metrics.enabled }}
+{{- if and (not .Values.metrics.token) (not .Values.metrics.existingSecret) (not .Values.metrics.allowUnauthenticated) }}
+{{- fail "metrics.enabled needs metrics.token or metrics.existingSecret. These metrics name your tenants and domains and show which of them have no working DMARC record. Set metrics.allowUnauthenticated=true only if the port is unreachable from anywhere untrusted." }}
+{{- end }}
+- name: METRICS_ENABLED
+  value: "true"
+- name: METRICS_PORT
+  value: {{ .Values.metrics.port | quote }}
+- name: METRICS_LABELS
+  value: {{ .Values.metrics.labels | quote }}
+- name: METRICS_DNS_INTERVAL
+  value: {{ .Values.metrics.dnsInterval | quote }}
+{{- if or .Values.metrics.token .Values.metrics.existingSecret }}
+- name: METRICS_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.metrics.existingSecret | default (include "dmarc-service.fullname" .) }}
+      key: {{ .Values.metrics.secretKey }}
+{{- else }}
+- name: METRICS_ALLOW_UNAUTHENTICATED
+  value: "true"
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/* Container port for the metrics listener */}}
+{{- define "dmarc-service.metricsPort" -}}
+{{- if .Values.metrics.enabled }}
+- name: metrics
+  containerPort: {{ .Values.metrics.port }}
+{{- end }}
 {{- end -}}
 
 {{/* Environment shared by web, smtp (direct) and migrate */}}

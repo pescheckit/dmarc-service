@@ -196,8 +196,11 @@ def _sender(message) -> str:
 
 def run() -> None:
     """Poll every configured mailbox until stopped."""
+    from dmarc_service import metrics
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     settings = get_settings()
+    metrics.serve()
     logger.info("polling configured mailboxes every %ss", settings.imap_poll_interval)
     while True:
         try:

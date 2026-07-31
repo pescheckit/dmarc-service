@@ -204,6 +204,59 @@ Every setting is an environment variable (see `src/dmarc_service/config.py`):
 | `IMAP_POLL_INTERVAL` | `300` | Seconds between polls |
 | `BACKUP_S3_URL` | *(empty)* | `s3://key:secret@endpoint/bucket[/prefix]`; empty disables backups |
 | `BACKUP_RETENTION_DAYS` | `30` | Delete backups older than this (0 keeps everything) |
+| `METRICS_ENABLED` | `false` | Serve Prometheus metrics (see below) |
+| `METRICS_PORT` / `METRICS_HOST` | `9100` / `0.0.0.0` | Where the metrics listener binds |
+| `METRICS_TOKEN` | *(empty)* | Bearer token scrapers must present; required |
+| `METRICS_ALLOW_UNAUTHENTICATED` | `false` | Run without a token, deliberately |
+| `METRICS_LABELS` | `true` | `false` publishes totals with no tenant or domain names |
+| `METRICS_DNS_INTERVAL` | `900` | Seconds between background DNS/SPF checks |
+
+## Metrics
+
+Off by default. When enabled, metrics are served on **their own port**, never
+on the web port, and the listener refuses to start without `METRICS_TOKEN`
+unless you set `METRICS_ALLOW_UNAUTHENTICATED=true`.
+
+That is not ceremony. The labels name every tenant and domain on the
+instance, say which of them have no working DMARC record, and say which are
+close to the SPF lookup limit, which together is a target list for spoofing
+your tenants. Do not route an Ingress or reverse proxy at this port. Set
+`METRICS_LABELS=false` to publish only totals if your Prometheus is shared
+more widely than the data.
+
+```
+- job_name: dmarc
+  authorization:
+    type: Bearer
+    credentials_file: /etc/prometheus/secrets/dmarc/token
+  static_configs:
+    - targets: ['dmarc.internal:9100']
+```
+
+| Metric | What it tells you |
+|---|---|
+| `dmarc_last_report_timestamp_seconds{domain}` | When each domain was last reported on. Senders report daily, so silence means reports are being lost, which no screen can show you |
+| `dmarc_dns_record_ok{domain,record,status}` | Whether each expected record is still published; catches a dropped `rua` or a half-finished rotation |
+| `dmarc_spf_lookups{domain}` | Lookups consumed of the ten RFC 7208 allows. At ten, receivers abandon SPF entirely |
+| `dmarc_messages_reported_total{domain,result}` | Messages covered by reports, passing and failing |
+| `dmarc_messages_received_total{status}` | Report mail by routing outcome: routed, duplicate, retired, unrouted, failed |
+| `dmarc_unrouted_messages` | Quarantine depth |
+| `dmarc_imap_poll_ok{mailbox}` | Whether each polled mailbox still works |
+| `dmarc_collector_up` | 0 when metrics are being served but the database cannot be read |
+
+Source IP is deliberately never a label: a busy domain sees tens of thousands
+of them, and that one label would take a Prometheus down with it.
+
+DNS and SPF gauges come from a background refresh every `METRICS_DNS_INTERVAL`
+seconds. A scrape reads the last result and never waits on a lookup, so the
+scrape interval cannot decide how hard the service hammers other people's
+nameservers.
+
+In Kubernetes the chart adds a ClusterIP Service for the metrics port only
+(never extra ports on the SMTP LoadBalancer), plus optional `ServiceMonitor`,
+`PrometheusRule` and `NetworkPolicy` objects. See `metrics.*` in
+`chart/dmarc-service/values.yaml`. Enabling metrics there without a token
+fails the install rather than publishing your tenant list.
 
 ## API
 

@@ -104,6 +104,38 @@ backup:
   resources: {}
   extraEnv: []
 
+# Prometheus metrics, on a port of their own that no Ingress routes to.
+# Treat these as sensitive: the labels name every tenant and domain, say
+# which of them have no working DMARC record, and say which are near the SPF
+# lookup limit. That is a target list for spoofing your tenants, so a token
+# is required unless you state that the port is unreachable anyway.
+metrics:
+  enabled: false
+  port: 9100
+  token: ""  # scrapers send "Authorization: Bearer <token>"
+  existingSecret: ""  # or bring your own Secret holding the token
+  secretKey: METRICS_TOKEN
+  allowUnauthenticated: false
+  # false publishes only totals, with no tenant, domain or mailbox names,
+  # for a Prometheus shared more widely than the data itself.
+  labels: true
+  dnsInterval: 900  # seconds between background DNS/SPF checks
+  serviceMonitor:
+    enabled: false  # needs prometheus-operator CRDs
+    interval: 60s
+    scrapeTimeout: 10s
+    labels: {}  # e.g. release: kube-prometheus-stack, to be picked up
+    namespace: ""  # defaults to the release namespace
+  rules:
+    enabled: false  # PrometheusRule with the alerts documented in the README
+    labels: {}
+    staleReportHours: 36  # senders report daily; silence means reports are lost
+    spfLookupWarning: 8  # of the ten RFC 7208 permits
+  networkPolicy:
+    # Restrict the metrics port to the namespaces allowed to scrape it.
+    enabled: false
+    namespaceSelector: {}  # empty = the release namespace only
+
 migrate:
   enabled: true  # pre-install/pre-upgrade Job running schema migrations
 

@@ -106,11 +106,15 @@ def run() -> None:
     settings = get_settings()
     if settings.smtp_mode == "direct":
         # The edge/forward variant is stateless; only direct mode touches the DB.
+        from dmarc_service import metrics
         from dmarc_service.control_plane.service import bootstrap
         from dmarc_service.db.session import session_scope
 
         with session_scope() as db:
             bootstrap(db)
+        # No DNS refresh here: the web process does that, and doing it in
+        # both would double the lookups for identical numbers.
+        metrics.serve()
 
     controller = build_controller(settings)
     controller.start()

@@ -27,9 +27,17 @@ from dmarc_service.ingest.pipeline import process_message, process_tlsrpt_http
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from dmarc_service import metrics
+
     with session_scope() as db:
         control_plane.bootstrap(db)
+    # On its own port, never on this app's router: see metrics.py. The web
+    # process owns the DNS/SPF refresh because that state belongs to the
+    # installation, not to any one process.
+    server = metrics.serve(dns_checks=True)
     yield
+    if server is not None:
+        server.shutdown()
 
 
 # API docs are public by design: they only describe the API surface (which

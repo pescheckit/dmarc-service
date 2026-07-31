@@ -60,6 +60,16 @@ def spf_record(domain: str, resolver=None) -> str:
 
 def expand(domain: str, resolver=None) -> list[ipaddress._BaseNetwork]:
     """All networks authorised by the domain's SPF record."""
+    return expand_with_cost(domain, resolver)[0]
+
+
+def expand_with_cost(domain: str, resolver=None) -> tuple[list[ipaddress._BaseNetwork], int]:
+    """Expansion, plus how many of the ten permitted lookups it consumed.
+
+    The cost is worth knowing on its own: a record sitting at nine is one
+    vendor away from exceeding the limit, at which point receivers stop
+    evaluating SPF entirely and every unsigned message starts failing.
+    """
     resolver = resolver or _resolver()
     networks: list[ipaddress._BaseNetwork] = []
     budget = [MAX_DNS_TERMS]
@@ -104,7 +114,7 @@ def expand(domain: str, resolver=None) -> list[ipaddress._BaseNetwork]:
                 logger.info("ignoring malformed SPF term %r in %s", term, name)
 
     walk(domain)
-    return networks
+    return networks, MAX_DNS_TERMS - max(budget[0], 0)
 
 
 # Expansion costs up to ten DNS lookups, so keep the result briefly.

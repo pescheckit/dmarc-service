@@ -1,0 +1,66 @@
+{{- if and .Values.metrics.enabled .Values.metrics.rules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "dmarc-service.fullname" . }}
+  labels:
+    {{- include "dmarc-service.labels" . | nindent 4 }}
+    {{- with .Values.metrics.rules.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: dmarc-service
+      rules:
+        - alert: DmarcReportsStale
+          # Senders report daily. Silence does not mean no mail was sent, it
+          # means reports stopped arriving, and the UI cannot show you an
+          # absence. This is the alert worth having.
+          expr: time() - dmarc_last_report_timestamp_seconds > {{ mul .Values.metrics.rules.staleReportHours 3600 }}
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: No DMARC report received for {{ "{{ $labels.domain | default \"any domain\" }}" }} in {{ .Values.metrics.rules.staleReportHours }}h
+            description: Reports arrive daily from every major receiver. Check the DNS records and, if a mailbox is polled, that polling still works.
+
+        - alert: DmarcDnsRecordMissing
+          # Someone edited a zone and dropped the rua, or a rotation was left
+          # half finished. Collection stops silently when this happens.
+          expr: dmarc_dns_record_ok == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: DNS record {{ "{{ $labels.record }}" }} is {{ "{{ $labels.status }}" }}
+            description: The record this service expects is not published as expected, so reports for this domain may not reach it.
+
+        - alert: DmarcSpfLookupsNearLimit
+          # At ten, receivers stop evaluating SPF entirely and every unsigned
+          # message starts failing. One added vendor is all it takes.
+          expr: {{ if .Values.metrics.labels }}dmarc_spf_lookups{{ else }}dmarc_spf_lookups_max{{ end }} >= {{ .Values.metrics.rules.spfLookupWarning }}
+          for: 6h
+          labels:
+            severity: warning
+          annotations:
+            summary: SPF for {{ "{{ $labels.domain | default \"a domain\" }}" }} uses {{ "{{ $value }}" }} of 10 permitted lookups
+            description: Exceeding ten makes receivers abandon SPF evaluation for the domain. Flatten includes or remove authorisations that never send.
+
+        - alert: DmarcImapPollFailing
+          expr: dmarc_imap_poll_ok == 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: Mailbox {{ "{{ $labels.mailbox }}" }} cannot be polled
+            description: Reports are accumulating unread. Credentials, the folder name, or the provider's app-password policy are the usual causes.
+
+        - alert: DmarcCollectorDown
+          expr: dmarc_collector_up == 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: dmarc-service cannot read its database
+            description: Metrics are being served but the database is unreachable, so reports arriving now are not being stored.
+{{- end }}

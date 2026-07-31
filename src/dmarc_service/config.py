@@ -58,6 +58,23 @@ class Settings(BaseSettings):
     web_host: str = "0.0.0.0"
     web_port: int = 8000
 
+    # Prometheus metrics, served on their own listener and never on the web
+    # port. The labels name your tenants and domains and say which of them
+    # have no working DMARC record, which is a target list, so this must not
+    # follow the UI onto the public internet. Off unless asked for, and it
+    # refuses to start without a token unless you opt out in writing.
+    metrics_enabled: bool = False
+    metrics_host: str = "0.0.0.0"  # containers need this; the port stays private
+    metrics_port: int = 9100
+    metrics_token: str = ""  # scrapers send "Authorization: Bearer <token>"
+    metrics_allow_unauthenticated: bool = False
+    # Include tenant, domain and mailbox names as labels. Turn this off to
+    # publish only totals, for a Prometheus shared more widely than the data.
+    metrics_labels: bool = True
+    # Seconds between the background DNS/SPF checks behind the per-domain
+    # gauges. Scrapes read the last result and never wait on a lookup.
+    metrics_dns_interval: int = 900
+
     # SMTP receiver
     smtp_host: str = "0.0.0.0"
     smtp_port: int = 2525
