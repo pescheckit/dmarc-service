@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -7,7 +7,7 @@ COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 RUN uv venv /opt/venv && uv pip install --python /opt/venv/bin/python --no-cache .
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # pg_dump for `dmarc-service backup`
 RUN apt-get update \
